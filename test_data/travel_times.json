@@ -1,0 +1,41 @@
+{
+  "addresses": [
+    "START",
+    "Konak Alsancak",
+    "Bornova Küçükpark",
+    "Buca Şirinyer",
+    "Karşıyaka Çarşı"
+  ],
+  "minutes": {
+    "START": {
+      "Konak Alsancak": 5,
+      "Bornova Küçükpark": 12,
+      "Buca Şirinyer": 9,
+      "Karşıyaka Çarşı": 14
+    },
+    "Konak Alsancak": {
+      "START": 5,
+      "Bornova Küçükpark": 22,
+      "Buca Şirinyer": 18,
+      "Karşıyaka Çarşı": 25
+    },
+    "Bornova Küçükpark": {
+      "START": 12,
+      "Konak Alsancak": 22,
+      "Buca Şirinyer": 30,
+      "Karşıyaka Çarşı": 35
+    },
+    "Buca Şirinyer": {
+      "START": 9,
+      "Konak Alsancak": 18,
+      "Bornova Küçükpark": 30,
+      "Karşıyaka Çarşı": 40
+    },
+    "Karşıyaka Çarşı": {
+      "START": 14,
+      "Konak Alsancak": 25,
+      "Bornova Küçükpark": 35,
+      "Buca Şirinyer": 40
+    }
+  }
+}

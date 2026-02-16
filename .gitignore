@@ -1,0 +1,27 @@
+# Flutter
+.dart_tool/
+.packages
+.pub/
+build/
+
+# macOS
+macos/Flutter/ephemeral/
+DerivedData/
+.DS_Store
+
+# iOS
+ios/Flutter/ephemeral/
+
+# Windows
+windows/flutter/ephemeral/
+
+# Linux
+linux/flutter/ephemeral/
+
+# Plugins
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# IDE
+.idea/
+.vscode/
