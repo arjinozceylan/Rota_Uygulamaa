@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 
+import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 
 import '../data/address_store.dart';
 import '../models/calendar_event.dart';
+import '../services/google_places_service.dart';
 import '../widgets/center_drop_card.dart';
 import '../widgets/top_action_bar.dart';
 import 'calendar_page.dart';
@@ -37,6 +39,9 @@ class _HomePageState extends State<HomePage> {
   final TextEditingController searchCtrl = TextEditingController();
   bool isSearching = false;
   List<String> suggestions = [];
+  final GooglePlacesService _placesService = const GooglePlacesService();
+  Timer? _searchDebounce;
+  int _latestSearchId = 0;
 
   // ✅ Yeni: başlangıç adresi seçimi (null => START / cihaz konumu)
   String? selectedStartAddress;
@@ -50,46 +55,62 @@ class _HomePageState extends State<HomePage> {
       if (!filterItems.contains(a)) filterItems.add(a);
     }
 
-    searchCtrl.addListener(() {
-      final q = searchCtrl.text.trim();
-      if (q.isEmpty) {
-        setState(() => suggestions = []);
-        return;
-      }
-
-      setState(() => isSearching = true);
-
-      // UI-only suggestion
-      Future.delayed(const Duration(milliseconds: 220), () {
-        if (!mounted) return;
-
-        final query = searchCtrl.text.trim();
-        if (query.isEmpty) {
-          setState(() {
-            suggestions = [];
-            isSearching = false;
-          });
-          return;
-        }
-
-        setState(() {
-          suggestions = [
-            '$query, İzmir',
-            '$query Mah., İzmir',
-            '$query Cad., Bornova/İzmir',
-            '$query Sok., Karşıyaka/İzmir',
-            '$query No:12, Konak/İzmir',
-          ];
-          isSearching = false;
-        });
-      });
-    });
+    searchCtrl.addListener(_onSearchChanged);
   }
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     searchCtrl.dispose();
     super.dispose();
+  }
+
+  void _onSearchChanged() {
+    final q = searchCtrl.text.trim();
+    _searchDebounce?.cancel();
+
+    if (q.isEmpty) {
+      setState(() {
+        suggestions = [];
+        isSearching = false;
+      });
+      return;
+    }
+
+    setState(() => isSearching = true);
+
+    _searchDebounce = Timer(const Duration(milliseconds: 300), () async {
+      final searchId = ++_latestSearchId;
+      final query = searchCtrl.text.trim();
+      if (query.isEmpty) {
+        if (!mounted) return;
+        setState(() {
+          suggestions = [];
+          isSearching = false;
+        });
+        return;
+      }
+
+      final remoteSuggestions = await _placesService.autocomplete(input: query);
+      if (!mounted || searchId != _latestSearchId) return;
+
+      setState(() {
+        suggestions = remoteSuggestions.isNotEmpty
+            ? remoteSuggestions
+            : _mockSuggestions(query);
+        isSearching = false;
+      });
+    });
+  }
+
+  List<String> _mockSuggestions(String query) {
+    return [
+      '$query, İzmir',
+      '$query Mah., İzmir',
+      '$query Cad., Bornova/İzmir',
+      '$query Sok., Karşıyaka/İzmir',
+      '$query No:12, Konak/İzmir',
+    ];
   }
 
   // Tek yerden ekleme: store + dropdown + kartlar
