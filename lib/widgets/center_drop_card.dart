@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../models/calendar_event.dart';
 
+enum AddressInputMode { maps, manual }
+
 class CenterDropCard extends StatelessWidget {
   final List<String> droppedAddresses;
   final void Function(String) onDropAddress;
@@ -20,6 +22,10 @@ class CenterDropCard extends StatelessWidget {
   final List<String> suggestions;
   final ValueChanged<String>? onSuggestionTap;
   final bool isSearching;
+  final AddressInputMode inputMode;
+  final ValueChanged<AddressInputMode>? onInputModeChanged;
+  final TextEditingController? manualAddressController;
+  final VoidCallback? onManualAddressAdd;
 
   const CenterDropCard({
     super.key,
@@ -36,6 +42,10 @@ class CenterDropCard extends StatelessWidget {
     this.suggestions = const [],
     this.onSuggestionTap,
     this.isSearching = false,
+    this.inputMode = AddressInputMode.maps,
+    this.onInputModeChanged,
+    this.manualAddressController,
+    this.onManualAddressAdd,
   });
 
   @override
@@ -113,50 +123,65 @@ class CenterDropCard extends StatelessWidget {
                 const SizedBox(height: 10),
               ],
 
-              // Search UI (mock)
-              if (searchController != null) ...[
-                _SearchBox(
-                  controller: searchController!,
-                  isSearching: isSearching,
+              if (searchController != null ||
+                  manualAddressController != null) ...[
+                _InputModeSelector(
+                  inputMode: inputMode,
+                  onModeChanged: onInputModeChanged,
                 ),
                 const SizedBox(height: 8),
-                if (suggestions.isNotEmpty)
-                  Container(
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF6F7F8),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.black12),
-                    ),
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxHeight: 120),
-                      child: ListView.separated(
-                        shrinkWrap: true,
-                        itemCount: suggestions.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
-                        itemBuilder: (context, i) {
-                          final s = suggestions[i];
-                          return ListTile(
-                            dense: true,
-                            leading: Icon(
-                              Icons.place_outlined,
-                              color: cs.primary,
-                            ),
-                            title: Text(
-                              s,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            trailing: TextButton(
-                              onPressed: onSuggestionTap == null
-                                  ? null
-                                  : () => onSuggestionTap!(s),
-                              child: const Text('Seç'),
-                            ),
-                          );
-                        },
+                if (inputMode == AddressInputMode.maps &&
+                    searchController != null) ...[
+                  _SearchBox(
+                    controller: searchController!,
+                    isSearching: isSearching,
+                  ),
+                  const SizedBox(height: 8),
+                  if (suggestions.isNotEmpty)
+                    Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF6F7F8),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.black12),
+                      ),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxHeight: 120),
+                        child: ListView.separated(
+                          shrinkWrap: true,
+                          itemCount: suggestions.length,
+                          separatorBuilder: (_, _) => const Divider(height: 1),
+                          itemBuilder: (context, i) {
+                            final s = suggestions[i];
+                            return ListTile(
+                              dense: true,
+                              leading: Icon(
+                                Icons.place_outlined,
+                                color: cs.primary,
+                              ),
+                              title: Text(
+                                s,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              trailing: TextButton(
+                                onPressed: onSuggestionTap == null
+                                    ? null
+                                    : () => onSuggestionTap!(s),
+                                child: const Text('Seç'),
+                              ),
+                            );
+                          },
+                        ),
                       ),
                     ),
+                ],
+                if (inputMode == AddressInputMode.manual &&
+                    manualAddressController != null) ...[
+                  _ManualAddressBox(
+                    controller: manualAddressController!,
+                    onAdd: onManualAddressAdd,
                   ),
+                ],
                 const SizedBox(height: 10),
               ],
 
@@ -321,7 +346,7 @@ class _SearchBox extends StatelessWidget {
             child: TextField(
               controller: controller,
               decoration: const InputDecoration(
-                hintText: 'Adres ara (UI demo)',
+                hintText: 'Haritadan adres ara',
                 border: InputBorder.none,
               ),
             ),
@@ -358,4 +383,70 @@ class _SearchBox extends StatelessWidget {
   }
 }
 
-//x
+class _InputModeSelector extends StatelessWidget {
+  const _InputModeSelector({required this.inputMode, this.onModeChanged});
+
+  final AddressInputMode inputMode;
+  final ValueChanged<AddressInputMode>? onModeChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: ChoiceChip(
+            selected: inputMode == AddressInputMode.maps,
+            label: const Text('1) Haritadan Seç'),
+            onSelected: (_) => onModeChanged?.call(AddressInputMode.maps),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: ChoiceChip(
+            selected: inputMode == AddressInputMode.manual,
+            label: const Text('2) Elle Yaz'),
+            onSelected: (_) => onModeChanged?.call(AddressInputMode.manual),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ManualAddressBox extends StatelessWidget {
+  const _ManualAddressBox({required this.controller, this.onAdd});
+
+  final TextEditingController controller;
+  final VoidCallback? onAdd;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF6F7F8),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.black12),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.edit_location_alt_outlined, color: cs.primary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              onSubmitted: (_) => onAdd?.call(),
+              decoration: const InputDecoration(
+                hintText: 'Adresi elle yaz',
+                border: InputBorder.none,
+              ),
+            ),
+          ),
+          FilledButton.tonal(onPressed: onAdd, child: const Text('Ekle')),
+        ],
+      ),
+    );
+  }
+}

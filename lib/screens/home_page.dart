@@ -37,11 +37,13 @@ class _HomePageState extends State<HomePage> {
 
   // Search (CenterDropCard için)
   final TextEditingController searchCtrl = TextEditingController();
+  final TextEditingController manualAddressCtrl = TextEditingController();
   bool isSearching = false;
   List<String> suggestions = [];
   final GooglePlacesService _placesService = const GooglePlacesService();
   Timer? _searchDebounce;
   int _latestSearchId = 0;
+  AddressInputMode inputMode = AddressInputMode.maps;
 
   // ✅ Yeni: başlangıç adresi seçimi (null => START / cihaz konumu)
   String? selectedStartAddress;
@@ -62,6 +64,7 @@ class _HomePageState extends State<HomePage> {
   void dispose() {
     _searchDebounce?.cancel();
     searchCtrl.dispose();
+    manualAddressCtrl.dispose();
     super.dispose();
   }
 
@@ -111,6 +114,15 @@ class _HomePageState extends State<HomePage> {
       '$query Sok., Karşıyaka/İzmir',
       '$query No:12, Konak/İzmir',
     ];
+  }
+
+  void _addManualAddress() {
+    final address = manualAddressCtrl.text.trim();
+    if (address.isEmpty) return;
+    _addAddressToPoolAndCards(address);
+    setState(() {
+      manualAddressCtrl.clear();
+    });
   }
 
   // Tek yerden ekleme: store + dropdown + kartlar
@@ -467,6 +479,16 @@ class _HomePageState extends State<HomePage> {
                           maxCount: maxDaily,
                           repeatByAddress: repeatByAddress,
                           searchController: searchCtrl,
+                          manualAddressController: manualAddressCtrl,
+                          inputMode: inputMode,
+                          onInputModeChanged: (mode) {
+                            setState(() {
+                              inputMode = mode;
+                              suggestions = [];
+                              searchCtrl.clear();
+                            });
+                          },
+                          onManualAddressAdd: _addManualAddress,
                           suggestions: suggestions,
                           isSearching: isSearching,
                           onSuggestionTap: (s) {
