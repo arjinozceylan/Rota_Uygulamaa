@@ -7,7 +7,8 @@ import 'package:file_picker/file_picker.dart';
 
 import '../data/address_store.dart';
 import '../models/calendar_event.dart';
-import '../services/google_places_service.dart';
+import '../core/models/address.dart';
+import '../screens/osm_places_service.dart';
 import '../widgets/center_drop_card.dart';
 import '../widgets/top_action_bar.dart';
 import 'calendar_page.dart';
@@ -39,11 +40,23 @@ class _HomePageState extends State<HomePage> {
   final TextEditingController searchCtrl = TextEditingController();
   final TextEditingController manualAddressCtrl = TextEditingController();
   bool isSearching = false;
-  List<String> suggestions = [];
-  final GooglePlacesService _placesService = const GooglePlacesService();
+  List<Address> suggestions = [];
+  final OsmPlacesService _placesService = const OsmPlacesService();
   Timer? _searchDebounce;
   int _latestSearchId = 0;
   AddressInputMode inputMode = AddressInputMode.maps;
+  int _manualCodeCounter = 1;
+
+  Address _makeManualAddress(String text) {
+    final t = text.trim();
+    return Address(
+      code: 'M${(_manualCodeCounter++).toString().padLeft(3, '0')}',
+      address: t,
+      placeId: 'manual:$t',
+      lat: null,
+      lng: null,
+    );
+  }
 
   // ✅ Yeni: başlangıç adresi seçimi (null => START / cihaz konumu)
   String? selectedStartAddress;
@@ -54,7 +67,8 @@ class _HomePageState extends State<HomePage> {
 
     // Store’daki adresleri dropdown’a çek
     for (final a in AddressStore.items) {
-      if (!filterItems.contains(a)) filterItems.add(a);
+      final text = a.address;
+      if (!filterItems.contains(text)) filterItems.add(text);
     }
 
     searchCtrl.addListener(_onSearchChanged);
@@ -94,44 +108,33 @@ class _HomePageState extends State<HomePage> {
         return;
       }
 
-      final remoteSuggestions = await _placesService.autocomplete(input: query);
+      final remoteResults = await _placesService.search(query: query);
+
       if (!mounted || searchId != _latestSearchId) return;
 
       setState(() {
-        suggestions = remoteSuggestions.isNotEmpty
-            ? remoteSuggestions
-            : _mockSuggestions(query);
+        suggestions = remoteResults; // ✅ List<Address>
         isSearching = false;
       });
     });
   }
 
-  List<String> _mockSuggestions(String query) {
-    return [
-      '$query, İzmir',
-      '$query Mah., İzmir',
-      '$query Cad., Bornova/İzmir',
-      '$query Sok., Karşıyaka/İzmir',
-      '$query No:12, Konak/İzmir',
-    ];
-  }
-
   void _addManualAddress() {
     final address = manualAddressCtrl.text.trim();
     if (address.isEmpty) return;
-    _addAddressToPoolAndCards(address);
+    _addAddressToPoolAndCards(_makeManualAddress(address));
     setState(() {
       manualAddressCtrl.clear();
     });
   }
 
   // Tek yerden ekleme: store + dropdown + kartlar
-  void _addAddressToPoolAndCards(String address) {
-    final a = address.trim();
+  void _addAddressToPoolAndCards(Address addressObj) {
+    final a = addressObj.address.trim();
     if (a.isEmpty) return;
 
     setState(() {
-      AddressStore.add(a);
+      AddressStore.add(addressObj);
 
       if (!filterItems.contains(a)) {
         filterItems.add(a);
@@ -282,7 +285,7 @@ class _HomePageState extends State<HomePage> {
         if (firstCol.isEmpty) continue;
         if (firstCol.toLowerCase() == 'adres') continue;
 
-        _addAddressToPoolAndCards(firstCol);
+        _addAddressToPoolAndCards(_makeManualAddress(firstCol));
         added++;
       }
 
@@ -404,7 +407,7 @@ class _HomePageState extends State<HomePage> {
                   onFilterChanged: (v) {
                     setState(() => selectedFilter = v);
                     if (v != 'Adresler') {
-                      _addAddressToPoolAndCards(v);
+                      _addAddressToPoolAndCards(_makeManualAddress(v));
                     }
                   },
                   primaryColor: cs.primary,
@@ -420,7 +423,9 @@ class _HomePageState extends State<HomePage> {
                     ).then((_) {
                       setState(() {
                         for (final a in AddressStore.items) {
-                          if (!filterItems.contains(a)) filterItems.add(a);
+                          final text = a.address;
+                          if (!filterItems.contains(text))
+                            filterItems.add(text);
                         }
                       });
                     });
@@ -449,7 +454,7 @@ class _HomePageState extends State<HomePage> {
                         onRemove: () {
                           setState(() {
                             addressCards.remove(a);
-                            AddressStore.remove(a);
+                            AddressStore.removeByAddress(a);
                             filterItems.remove(a);
 
                             if (selectedStartAddress == a) {
@@ -489,13 +494,27 @@ class _HomePageState extends State<HomePage> {
                             });
                           },
                           onManualAddressAdd: _addManualAddress,
-                          suggestions: suggestions,
+                          suggestions: suggestions
+                              .map((a) => a.address)
+                              .toList(),
                           isSearching: isSearching,
                           onSuggestionTap: (s) {
-                            _addAddressToPoolAndCards(s);
+                            final match = suggestions
+                                .where((a) => a.address == s)
+                                .toList();
+
+                            if (match.isNotEmpty) {
+                              _addAddressToPoolAndCards(
+                                match.first,
+                              ); // ✅ lat/lng kaybolmaz
+                            } else {
+                              _addAddressToPoolAndCards(_makeManualAddress(s));
+                            }
+
                             setState(() {
                               searchCtrl.clear();
-                              suggestions = [];
+                              suggestions =
+                                  <Address>[]; // ✅ artık List<Address>
                             });
                           },
                           helperText:

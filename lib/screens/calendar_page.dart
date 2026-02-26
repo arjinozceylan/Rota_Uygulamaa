@@ -11,7 +11,19 @@ class CalendarPage extends StatefulWidget {
 
 class _CalendarPageState extends State<CalendarPage> {
   // Üst dropdown
-  final List<String> addresses = AddressStore.items;
+  // Üst dropdown (AddressStore güncellendikçe otomatik güncel kalsın)
+  List<String> get addresses {
+    final items = List<String>.from(AddressStore.items);
+
+    // "Adresler" başlığını her zaman ilk eleman yap
+    if (items.contains('Adresler')) {
+      items.remove('Adresler');
+    }
+    items.insert(0, 'Adresler');
+
+    return items;
+  }
+
   String selectedAddress = 'Adresler';
 
   late DateTime weekStart; // Pazartesi
@@ -44,7 +56,12 @@ class _CalendarPageState extends State<CalendarPage> {
   // =========================
   // ✅ ÇAKIŞMA KONTROLÜ
   // =========================
-  bool _overlaps(DateTime aStart, DateTime aEnd, DateTime bStart, DateTime bEnd) {
+  bool _overlaps(
+    DateTime aStart,
+    DateTime aEnd,
+    DateTime bStart,
+    DateTime bEnd,
+  ) {
     // [aStart, aEnd) ile [bStart, bEnd) kesişiyor mu?
     return aStart.isBefore(bEnd) && aEnd.isAfter(bStart);
   }
@@ -62,7 +79,9 @@ class _CalendarPageState extends State<CalendarPage> {
   /// Tekrarları da dahil ederek eklemeyi dener.
   /// Çakışma varsa: (false, conflictDate)
   /// Başarılıysa: (true, null)
-  ({bool ok, DateTime? conflictDay}) _tryAddEventWithRepeat(CalendarEvent base) {
+  ({bool ok, DateTime? conflictDay}) _tryAddEventWithRepeat(
+    CalendarEvent base,
+  ) {
     final occurrences = <({DateTime start, DateTime end})>[];
 
     // base occurrence
@@ -70,7 +89,9 @@ class _CalendarPageState extends State<CalendarPage> {
 
     if (base.repeat != RepeatType.none) {
       final baseStartOnly = _dateOnly(base.start);
-      final horizon = baseStartOnly.add(const Duration(days: _repeatHorizonDays));
+      final horizon = baseStartOnly.add(
+        const Duration(days: _repeatHorizonDays),
+      );
 
       int i = 1;
       while (true) {
@@ -136,7 +157,10 @@ class _CalendarPageState extends State<CalendarPage> {
 
   @override
   Widget build(BuildContext context) {
-    final days = List<DateTime>.generate(7, (i) => weekStart.add(Duration(days: i)));
+    final days = List<DateTime>.generate(
+      7,
+      (i) => weekStart.add(Duration(days: i)),
+    );
 
     if (!addresses.contains(selectedAddress)) {
       selectedAddress = 'Adresler';
@@ -173,12 +197,15 @@ class _CalendarPageState extends State<CalendarPage> {
                       child: DropdownButton<String>(
                         value: selectedAddress,
                         items: addresses
-                            .map((a) => DropdownMenuItem<String>(
-                                  value: a,
-                                  child: Text(a),
-                                ))
+                            .map(
+                              (a) => DropdownMenuItem<String>(
+                                value: a,
+                                child: Text(a),
+                              ),
+                            )
                             .toList(),
-                        onChanged: (v) => setState(() => selectedAddress = v ?? 'Adresler'),
+                        onChanged: (v) =>
+                            setState(() => selectedAddress = v ?? 'Adresler'),
                       ),
                     ),
                   ),
@@ -203,7 +230,10 @@ class _CalendarPageState extends State<CalendarPage> {
                   const Spacer(),
                   const Text(
                     'Takvim',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ],
               ),
@@ -223,7 +253,10 @@ class _CalendarPageState extends State<CalendarPage> {
                         Align(
                           alignment: Alignment.centerLeft,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 8,
+                            ),
                             decoration: BoxDecoration(
                               color: const Color(0xFF2A2A2A),
                               borderRadius: BorderRadius.circular(10),
@@ -233,13 +266,18 @@ class _CalendarPageState extends State<CalendarPage> {
                               children: [
                                 Text(
                                   '${_monthName(days[0].month)} ${days[0].year}',
-                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w800,
+                                  ),
                                 ),
                                 const SizedBox(width: 10),
                                 _navBtn(
                                   Icons.chevron_left,
                                   () => setState(() {
-                                    weekStart = weekStart.subtract(const Duration(days: 7));
+                                    weekStart = weekStart.subtract(
+                                      const Duration(days: 7),
+                                    );
                                     selectedDay = _dateOnly(weekStart);
                                   }),
                                 ),
@@ -247,7 +285,9 @@ class _CalendarPageState extends State<CalendarPage> {
                                 _navBtn(
                                   Icons.chevron_right,
                                   () => setState(() {
-                                    weekStart = weekStart.add(const Duration(days: 7));
+                                    weekStart = weekStart.add(
+                                      const Duration(days: 7),
+                                    );
                                     selectedDay = _dateOnly(weekStart);
                                   }),
                                 ),
@@ -273,25 +313,39 @@ class _CalendarPageState extends State<CalendarPage> {
                                     color: const Color(0xFF1E1E1E),
                                     child: Row(
                                       children: days.map((d) {
-                                        final isSel = _isSameDate(d, selectedDay);
+                                        final isSel = _isSameDate(
+                                          d,
+                                          selectedDay,
+                                        );
                                         return Expanded(
                                           child: InkWell(
-                                            onTap: () => setState(() => selectedDay = _dateOnly(d)),
+                                            onTap: () => setState(
+                                              () => selectedDay = _dateOnly(d),
+                                            ),
                                             child: Container(
                                               alignment: Alignment.center,
                                               decoration: BoxDecoration(
-                                                border: Border.all(color: Colors.white.withOpacity(0.08)),
-                                                color: isSel ? Colors.white.withOpacity(0.07) : Colors.transparent,
+                                                border: Border.all(
+                                                  color: Colors.white
+                                                      .withOpacity(0.08),
+                                                ),
+                                                color: isSel
+                                                    ? Colors.white.withOpacity(
+                                                        0.07,
+                                                      )
+                                                    : Colors.transparent,
                                               ),
                                               child: Column(
-                                                mainAxisAlignment: MainAxisAlignment.center,
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment.center,
                                                 children: [
                                                   Text(
                                                     _weekdayShort(d.weekday),
                                                     style: const TextStyle(
                                                       color: Colors.white,
                                                       fontSize: 12,
-                                                      fontWeight: FontWeight.w800,
+                                                      fontWeight:
+                                                          FontWeight.w800,
                                                     ),
                                                   ),
                                                   const SizedBox(height: 2),
@@ -300,7 +354,8 @@ class _CalendarPageState extends State<CalendarPage> {
                                                     style: const TextStyle(
                                                       color: Colors.white,
                                                       fontSize: 12,
-                                                      fontWeight: FontWeight.w900,
+                                                      fontWeight:
+                                                          FontWeight.w900,
                                                     ),
                                                   ),
                                                 ],
@@ -327,7 +382,10 @@ class _CalendarPageState extends State<CalendarPage> {
                                                 width: 64,
                                                 alignment: Alignment.center,
                                                 decoration: BoxDecoration(
-                                                  border: Border.all(color: Colors.white.withOpacity(0.08)),
+                                                  border: Border.all(
+                                                    color: Colors.white
+                                                        .withOpacity(0.08),
+                                                  ),
                                                 ),
                                                 child: Text(
                                                   '${hour.toString().padLeft(2, '0')}:00',
@@ -341,56 +399,109 @@ class _CalendarPageState extends State<CalendarPage> {
 
                                               // 7 gün hücre
                                               ...days.map((day) {
-                                                final slotStart =
-                                                    DateTime(day.year, day.month, day.day, hour, 0);
-                                                final eventAtSlot = _findEventAtSlot(day, hour);
+                                                final slotStart = DateTime(
+                                                  day.year,
+                                                  day.month,
+                                                  day.day,
+                                                  hour,
+                                                  0,
+                                                );
+                                                final eventAtSlot =
+                                                    _findEventAtSlot(day, hour);
 
                                                 return Expanded(
                                                   child: DragTarget<String>(
-                                                    onWillAcceptWithDetails: (_) => true,
-                                                    onAcceptWithDetails: (details) {
-                                                      _handleDrop(details.data, slotStart);
-                                                    },
+                                                    onWillAcceptWithDetails:
+                                                        (_) => true,
+                                                    onAcceptWithDetails:
+                                                        (details) {
+                                                          _handleDrop(
+                                                            details.data,
+                                                            slotStart,
+                                                          );
+                                                        },
                                                     builder: (context, candidate, rejected) {
-                                                      final hovering = candidate.isNotEmpty;
+                                                      final hovering =
+                                                          candidate.isNotEmpty;
 
                                                       return Container(
                                                         decoration: BoxDecoration(
                                                           border: Border.all(
-                                                            color: Colors.white.withOpacity(0.08),
+                                                            color: Colors.white
+                                                                .withOpacity(
+                                                                  0.08,
+                                                                ),
                                                           ),
                                                           color: hovering
-                                                              ? Colors.white.withOpacity(0.06)
-                                                              : Colors.transparent,
+                                                              ? Colors.white
+                                                                    .withOpacity(
+                                                                      0.06,
+                                                                    )
+                                                              : Colors
+                                                                    .transparent,
                                                         ),
-                                                        child: eventAtSlot == null
+                                                        child:
+                                                            eventAtSlot == null
                                                             ? null
                                                             : Align(
-                                                                alignment: Alignment.centerLeft,
+                                                                alignment: Alignment
+                                                                    .centerLeft,
                                                                 child: Padding(
-                                                                  padding: const EdgeInsets.symmetric(
-                                                                      horizontal: 6, vertical: 4),
+                                                                  padding:
+                                                                      const EdgeInsets.symmetric(
+                                                                        horizontal:
+                                                                            6,
+                                                                        vertical:
+                                                                            4,
+                                                                      ),
                                                                   child: GestureDetector(
-                                                                    onTap: () => _showEventDetail(day, eventAtSlot),
-                                                                    onSecondaryTapDown: (_) =>
-                                                                        _removeEvent(day, eventAtSlot),
+                                                                    onTap: () =>
+                                                                        _showEventDetail(
+                                                                          day,
+                                                                          eventAtSlot,
+                                                                        ),
+                                                                    onSecondaryTapDown:
+                                                                        (
+                                                                          _,
+                                                                        ) => _removeEvent(
+                                                                          day,
+                                                                          eventAtSlot,
+                                                                        ),
                                                                     child: Container(
                                                                       padding: const EdgeInsets.symmetric(
-                                                                          horizontal: 8, vertical: 5),
+                                                                        horizontal:
+                                                                            8,
+                                                                        vertical:
+                                                                            5,
+                                                                      ),
                                                                       decoration: BoxDecoration(
-                                                                        color: Colors.white.withOpacity(0.12),
-                                                                        borderRadius: BorderRadius.circular(999),
+                                                                        color: Colors
+                                                                            .white
+                                                                            .withOpacity(
+                                                                              0.12,
+                                                                            ),
+                                                                        borderRadius:
+                                                                            BorderRadius.circular(
+                                                                              999,
+                                                                            ),
                                                                         border: Border.all(
-                                                                            color: Colors.white.withOpacity(0.16)),
+                                                                          color: Colors.white.withOpacity(
+                                                                            0.16,
+                                                                          ),
+                                                                        ),
                                                                       ),
                                                                       child: Text(
                                                                         '${_hhmm(eventAtSlot.start)}-${_hhmm(eventAtSlot.end)} • ${eventAtSlot.title}',
                                                                         style: const TextStyle(
-                                                                          color: Colors.white,
-                                                                          fontSize: 11,
-                                                                          fontWeight: FontWeight.w700,
+                                                                          color:
+                                                                              Colors.white,
+                                                                          fontSize:
+                                                                              11,
+                                                                          fontWeight:
+                                                                              FontWeight.w700,
                                                                         ),
-                                                                        overflow: TextOverflow.ellipsis,
+                                                                        overflow:
+                                                                            TextOverflow.ellipsis,
                                                                       ),
                                                                     ),
                                                                   ),
@@ -459,12 +570,12 @@ class _CalendarPageState extends State<CalendarPage> {
       ),
       builder: (ctx) {
         DateTime toDateTime(TimeOfDay t) => DateTime(
-              slotStart.year,
-              slotStart.month,
-              slotStart.day,
-              t.hour,
-              t.minute,
-            );
+          slotStart.year,
+          slotStart.month,
+          slotStart.day,
+          t.hour,
+          t.minute,
+        );
 
         return Padding(
           padding: EdgeInsets.only(
@@ -479,7 +590,13 @@ class _CalendarPageState extends State<CalendarPage> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(address, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
+                  Text(
+                    address,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                   const SizedBox(height: 8),
                   Text(
                     'Başlangıç: ${slotStart.hour.toString().padLeft(2, '0')}:00',
@@ -487,20 +604,29 @@ class _CalendarPageState extends State<CalendarPage> {
                   ),
                   const SizedBox(height: 12),
 
-                  const Text('Bitiş', style: TextStyle(fontWeight: FontWeight.w800)),
+                  const Text(
+                    'Bitiş',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
                   const SizedBox(height: 8),
                   _timeField(
                     label: 'Bitiş Saati',
                     value: endTime.format(ctx),
                     onTap: () async {
-                      final t = await showTimePicker(context: ctx, initialTime: endTime);
+                      final t = await showTimePicker(
+                        context: ctx,
+                        initialTime: endTime,
+                      );
                       if (t == null) return;
                       setModal(() => endTime = t);
                     },
                   ),
 
                   const SizedBox(height: 14),
-                  const Text('Tekrar', style: TextStyle(fontWeight: FontWeight.w800)),
+                  const Text(
+                    'Tekrar',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
                   const SizedBox(height: 8),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -514,15 +640,24 @@ class _CalendarPageState extends State<CalendarPage> {
                         value: repeat,
                         isExpanded: true,
                         items: RepeatType.values
-                            .map((r) => DropdownMenuItem(value: r, child: Text(r.label)))
+                            .map(
+                              (r) => DropdownMenuItem(
+                                value: r,
+                                child: Text(r.label),
+                              ),
+                            )
                             .toList(),
-                        onChanged: (v) => setModal(() => repeat = v ?? RepeatType.none),
+                        onChanged: (v) =>
+                            setModal(() => repeat = v ?? RepeatType.none),
                       ),
                     ),
                   ),
 
                   const SizedBox(height: 14),
-                  const Text('Not', style: TextStyle(fontWeight: FontWeight.w800)),
+                  const Text(
+                    'Not',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
                   const SizedBox(height: 8),
                   TextField(
                     controller: noteCtrl,
@@ -560,7 +695,11 @@ class _CalendarPageState extends State<CalendarPage> {
 
                             if (!e.isAfter(s)) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Bitiş saati başlangıçtan sonra olmalı')),
+                                const SnackBar(
+                                  content: Text(
+                                    'Bitiş saati başlangıçtan sonra olmalı',
+                                  ),
+                                ),
                               );
                               return;
                             }
@@ -568,7 +707,11 @@ class _CalendarPageState extends State<CalendarPage> {
                             // ✅ Aynı gün içinde anlık çakışma kontrolü (modal kapanmadan)
                             if (_hasConflictOnDay(_dateOnly(s), s, e)) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Bu saat aralığında başka bir adres var (çakışma).')),
+                                const SnackBar(
+                                  content: Text(
+                                    'Bu saat aralığında başka bir adres var (çakışma).',
+                                  ),
+                                ),
                               );
                               return;
                             }
@@ -580,7 +723,9 @@ class _CalendarPageState extends State<CalendarPage> {
                                 start: s,
                                 end: e,
                                 repeat: repeat,
-                                note: noteCtrl.text.trim().isEmpty ? null : noteCtrl.text.trim(),
+                                note: noteCtrl.text.trim().isEmpty
+                                    ? null
+                                    : noteCtrl.text.trim(),
                               ),
                             );
                           },
@@ -658,7 +803,10 @@ class _CalendarPageState extends State<CalendarPage> {
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Kapat')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Kapat'),
+          ),
           TextButton(
             onPressed: () {
               Navigator.pop(ctx);
@@ -708,7 +856,10 @@ class _CalendarPageState extends State<CalendarPage> {
             child: Text(
               text,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontWeight: FontWeight.w800, color: Color(0xFF2E7D32)),
+              style: const TextStyle(
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF2E7D32),
+              ),
             ),
           ),
         ],
@@ -747,7 +898,8 @@ class _CalendarPageState extends State<CalendarPage> {
   // ====== Date helpers ======
   DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
 
-  bool _isSameDate(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
+  bool _isSameDate(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
 
   DateTime _startOfWeek(DateTime d) {
     final only = _dateOnly(d);
