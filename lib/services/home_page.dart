@@ -11,7 +11,9 @@ import '../core/models/address.dart';
 import '../screens/osm_places_service.dart';
 import '../widgets/center_drop_card.dart';
 import '../widgets/top_action_bar.dart';
-import 'calendar_page.dart';
+import '../screens/calendar_page.dart';
+import '../screens/map_picker_page.dart';
+import 'osrm_route_service.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -46,6 +48,40 @@ class _HomePageState extends State<HomePage> {
   int _latestSearchId = 0;
   AddressInputMode inputMode = AddressInputMode.maps;
   int _manualCodeCounter = 1;
+  int _mapPickCodeCounter = 1;
+  final OsrmRouteService _osrm = const OsrmRouteService();
+
+  Address _makeMapPickedAddress(MapPickResult res) {
+    final code = 'P${(_mapPickCodeCounter++).toString().padLeft(3, '0')}';
+
+    final lat = res.point.latitude;
+    final lng = res.point.longitude;
+
+    return Address(
+      code: code,
+      address: res.label,
+      placeId: 'osm:${lat.toStringAsFixed(6)},${lng.toStringAsFixed(6)}',
+      lat: lat,
+      lng: lng,
+    );
+  }
+
+  Future<void> _openMapPicker() async {
+    final res = await Navigator.push<MapPickResult>(
+      context,
+      MaterialPageRoute(builder: (_) => const MapPickerPage()),
+    );
+    if (!mounted || res == null) return;
+
+    // Haritadan seçilen adresi havuza/kartlara ekle
+    _addAddressToPoolAndCards(_makeMapPickedAddress(res));
+
+    // UI temizliği
+    setState(() {
+      suggestions = <Address>[];
+      searchCtrl.clear();
+    });
+  }
 
   Address _makeManualAddress(String text) {
     final t = text.trim();
@@ -88,7 +124,7 @@ class _HomePageState extends State<HomePage> {
 
     if (q.isEmpty) {
       setState(() {
-        suggestions = [];
+        suggestions = <Address>[];
         isSearching = false;
       });
       return;
@@ -102,7 +138,7 @@ class _HomePageState extends State<HomePage> {
       if (query.isEmpty) {
         if (!mounted) return;
         setState(() {
-          suggestions = [];
+          suggestions = <Address>[];
           isSearching = false;
         });
         return;
@@ -299,75 +335,147 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  void _runDemoRoute() {
+  Future<void> _runDemoRoute() async {
+    if (dropped.isEmpty) return;
+
+    // Build a map from address text to Address object (with lat/lng)
+    final Map<String, Address> byText = {
+      for (final a in AddressStore.items) a.address: a,
+    };
+
+    // Collect stops (must have coordinates)
+    final stops = <Address>[];
+    for (final txt in dropped) {
+      final a = byText[txt];
+      if (a == null) continue;
+      if (a.lat == null || a.lng == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '"${a.address}" için koordinat yok. Haritadan seç / suggestion ile ekle.',
+            ),
+          ),
+        );
+        return;
+      }
+      stops.add(a);
+    }
+
+    if (stops.length < 2) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Rota için en az 2 koordinatlı adres gerekli.'),
+        ),
+      );
+      return;
+    }
+
+    // Decide start:
+    // - If user selected a start address, use it.
+    // - If START (null) is selected, we cannot read device location on desktop yet;
+    //   so we pick the first stop as the temporary start.
+    Address start;
+    if (selectedStartAddress != null) {
+      final s = byText[selectedStartAddress!];
+      if (s == null || s.lat == null || s.lng == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Seçili başlangıç adresi geçersiz.')),
+        );
+        return;
+      }
+      start = s;
+    } else {
+      start = stops.first;
+    }
+
+    // Build node order: start + remaining stops (no duplicates)
+    final nodes = <Address>[start];
+    for (final s in stops) {
+      if (s.address == start.address) continue;
+      nodes.add(s);
+    }
+
+    // Show loading dialog
     showDialog(
       context: context,
-      builder: (_) {
-        return StatefulBuilder(
-          builder: (ctx, setLocal) {
-            final result = buildBestRouteDemo(
-              dropped,
-              startAddress: selectedStartAddress,
-            );
-
-            return AlertDialog(
-              title: const Text('Örnek Rota (Süre Minimizasyonu)'),
-              content: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Başlangıç Adresi',
-                      style: TextStyle(fontWeight: FontWeight.w800),
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF6F7F6),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.black12),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String?>(
-                          value: selectedStartAddress,
-                          isExpanded: true,
-                          items: [
-                            const DropdownMenuItem<String?>(
-                              value: null,
-                              child: Text('START (Cihaz konumu)'),
-                            ),
-                            ...dropped.map(
-                              (a) => DropdownMenuItem<String?>(
-                                value: a,
-                                child: Text(a, overflow: TextOverflow.ellipsis),
-                              ),
-                            ),
-                          ],
-                          onChanged: (v) {
-                            setLocal(() => selectedStartAddress = v);
-                          },
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    Text('Toplam süre: ${result.totalMinutes} dk'),
-                    const SizedBox(height: 10),
-                    Text(result.prettyPath),
-                  ],
-                ),
+      barrierDismissible: false,
+      builder: (_) => const AlertDialog(
+        content: SizedBox(
+          height: 64,
+          child: Row(
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 16),
+              Expanded(
+                child: Text('Gerçek süre/mesafe hesaplanıyor (OSRM)...'),
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Kapat'),
-                ),
-              ],
-            );
-          },
-        );
-      },
+            ],
+          ),
+        ),
+      ),
     );
+
+    try {
+      // Fetch NxN matrix
+      final matrix = await _osrm.table(
+        coords: nodes
+            .map((a) => LatLng(a.lat!, a.lng!))
+            .toList(growable: false),
+      );
+
+      // Build route using NN + 2-opt over matrix durations
+      final idxRoute = _nearestNeighborTourIdx(matrix, 0);
+      final improved = _twoOptIdx(matrix, idxRoute);
+
+      final totalMin = _tourCostIdxMin(matrix, improved).round();
+      final totalKm = _tourCostIdxKm(matrix, improved);
+
+      // Build pretty path labels (return to start)
+      final path = improved.map((i) => nodes[i].address).toList();
+
+      if (!mounted) return;
+      Navigator.pop(context); // close loading
+
+      showDialog(
+        context: context,
+        builder: (_) {
+          return AlertDialog(
+            title: const Text('Rota (Gerçek Süre/Mesafe - OSRM)'),
+            content: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Toplam süre: $totalMin dk'),
+                  const SizedBox(height: 6),
+                  Text('Toplam mesafe: ${totalKm.toStringAsFixed(1)} km'),
+                  const SizedBox(height: 12),
+                  Text(path.join(' → ')),
+                  if (selectedStartAddress == null) ...[
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Not: START (cihaz konumu) şu an masaüstünde okunmuyor. Geçici olarak ilk adres başlangıç alındı.',
+                      style: TextStyle(fontSize: 12, color: Colors.black54),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Kapat'),
+              ),
+            ],
+          );
+        },
+      );
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context); // close loading
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('OSRM hata: $e')));
+    }
   }
 
   @override
@@ -489,9 +597,14 @@ class _HomePageState extends State<HomePage> {
                           onInputModeChanged: (mode) {
                             setState(() {
                               inputMode = mode;
-                              suggestions = [];
+                              suggestions = <Address>[];
                               searchCtrl.clear();
                             });
+
+                            // Haritadan Seç moduna geçildiyse harita sayfasını aç
+                            if (mode == AddressInputMode.maps) {
+                              _openMapPicker();
+                            }
                           },
                           onManualAddressAdd: _addManualAddress,
                           suggestions: suggestions
@@ -540,7 +653,9 @@ class _HomePageState extends State<HomePage> {
                           const SizedBox(width: 12),
                           Expanded(
                             child: FilledButton.icon(
-                              onPressed: dropped.isEmpty ? null : _runDemoRoute,
+                              onPressed: dropped.isEmpty
+                                  ? null
+                                  : () => _runDemoRoute(),
                               icon: const Icon(Icons.route),
                               label: const Text('Rota Oluştur'),
                             ),
@@ -639,97 +754,91 @@ class _InfoSection extends StatelessWidget {
 }
 
 /// ===============================
-///  DEMO ROTA ALGORİTMASI
+///  GERÇEK ROTA (OSRM Matrix)
 ///  Nearest Neighbor + 2-opt
-///  Başlangıç adresi seçilebilir
+///  (Index bazlı)
 /// ===============================
 
-class RouteResult {
-  RouteResult({required this.path, required this.totalMinutes});
-  final List<String> path;
-  final int totalMinutes;
-
-  String get prettyPath => path.join(' → ');
+double _durMin(OsrmMatrix m, int i, int j) {
+  final v = m.durationsSeconds[i][j];
+  if (v == null) return 1e15;
+  return v / 60.0;
 }
 
-// Aynı adres çiftine stabil “süre” üret (demo)
-int _stableMinutes(String a, String b) {
-  int hash = 0;
-  final s = '$a|$b';
-  for (int i = 0; i < s.length; i++) {
-    hash = (hash * 31 + s.codeUnitAt(i)) & 0x7fffffff;
-  }
-  // 6–38 dk arası
-  return 6 + (hash % 33);
+double _distKm(OsrmMatrix m, int i, int j) {
+  final v = m.distancesMeters[i][j];
+  if (v == null) return 1e15;
+  return v / 1000.0;
 }
 
-int _time(String a, String b) {
-  if (a == b) return 0;
-  return _stableMinutes(a, b);
-}
-
-int _tourCost(List<String> path) {
-  int sum = 0;
-  for (int i = 0; i < path.length - 1; i++) {
-    sum += _time(path[i], path[i + 1]);
+// Toplam süre (dakika)
+double _tourCostIdxMin(OsrmMatrix m, List<int> path) {
+  double sum = 0;
+  for (int k = 0; k < path.length - 1; k++) {
+    sum += _durMin(m, path[k], path[k + 1]);
   }
   return sum;
 }
 
-// ✅ Başlangıç parametreli nearest neighbor turu
-List<String> _nearestNeighborTour(List<String> stops, String start) {
-  final unvisited = stops.toSet();
+// Toplam mesafe (km)
+double _tourCostIdxKm(OsrmMatrix m, List<int> path) {
+  double sum = 0;
+  for (int k = 0; k < path.length - 1; k++) {
+    sum += _distKm(m, path[k], path[k + 1]);
+  }
+  return sum;
+}
 
-  // start stops içinde yoksa ekle
-  if (!unvisited.contains(start)) {
-    unvisited.add(start);
+List<int> _nearestNeighborTourIdx(OsrmMatrix m, int startIdx) {
+  final n = m.n;
+  final unvisited = <int>{};
+  for (int i = 0; i < n; i++) {
+    if (i != startIdx) unvisited.add(i);
   }
 
-  unvisited.remove(start);
+  final route = <int>[startIdx];
+  int current = startIdx;
 
-  final route = <String>[start];
-
-  String current = start;
   while (unvisited.isNotEmpty) {
-    String? best;
-    int bestCost = 1 << 30;
+    int best = -1;
+    double bestCost = 1e15;
 
     for (final cand in unvisited) {
-      final c = _time(current, cand);
+      final c = _durMin(m, current, cand);
       if (c < bestCost) {
         bestCost = c;
         best = cand;
       }
     }
 
-    route.add(best!);
+    route.add(best);
     unvisited.remove(best);
     current = best;
   }
 
-  route.add(start); // geri dön
+  route.add(startIdx); // return
   return route;
 }
 
-List<String> _twoOpt(List<String> path) {
+List<int> _twoOptIdx(OsrmMatrix m, List<int> path) {
   if (path.length <= 4) return path;
 
   bool improved = true;
-  List<String> best = List<String>.from(path);
-  int bestCost = _tourCost(best);
+  List<int> best = List<int>.from(path);
+  double bestCost = _tourCostIdxMin(m, best);
 
   while (improved) {
     improved = false;
 
     for (int i = 1; i < best.length - 2; i++) {
       for (int k = i + 1; k < best.length - 1; k++) {
-        final candidate = <String>[
+        final candidate = <int>[
           ...best.sublist(0, i),
           ...best.sublist(i, k + 1).reversed,
           ...best.sublist(k + 1),
         ];
 
-        final candCost = _tourCost(candidate);
+        final candCost = _tourCostIdxMin(m, candidate);
         if (candCost < bestCost) {
           best = candidate;
           bestCost = candCost;
@@ -740,23 +849,4 @@ List<String> _twoOpt(List<String> path) {
   }
 
   return best;
-}
-
-RouteResult buildBestRouteDemo(List<String> dropped, {String? startAddress}) {
-  final stops = dropped
-      .map((e) => e.trim())
-      .where((e) => e.isNotEmpty)
-      .toSet()
-      .toList();
-
-  final String start = (startAddress != null && stops.contains(startAddress))
-      ? startAddress
-      : 'START';
-
-  final List<String> nodes = (start == 'START') ? ['START', ...stops] : stops;
-
-  final nn = _nearestNeighborTour(nodes, start);
-  final improved = _twoOpt(nn);
-
-  return RouteResult(path: improved, totalMinutes: _tourCost(improved));
 }

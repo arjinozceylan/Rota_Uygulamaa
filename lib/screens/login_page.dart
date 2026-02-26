@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'home_page.dart';
+import '../services/home_page.dart';
 
 enum _LoginMode { guest, existing }
 
@@ -72,10 +72,7 @@ class _LoginPageState extends State<LoginPage> {
                       child: Row(
                         children: [
                           if (wide)
-                            const Expanded(
-                              flex: 5,
-                              child: _LeftBrandPanel(),
-                            ),
+                            const Expanded(flex: 5, child: _LeftBrandPanel()),
                           Expanded(
                             flex: wide ? 6 : 1,
                             child: Padding(
@@ -124,10 +121,12 @@ class _LoginPageState extends State<LoginPage> {
                                             passwordCtrl: passwordCtrl,
                                             hidePassword: hidePassword,
                                             onToggleHide: () => setState(
-                                              () => hidePassword = !hidePassword,
+                                              () =>
+                                                  hidePassword = !hidePassword,
                                             ),
-                                            onLogin:
-                                                isSubmitting ? null : _loginExisting,
+                                            onLogin: isSubmitting
+                                                ? null
+                                                : _loginExisting,
                                             isSubmitting: isSubmitting,
                                             accent: accent,
                                           )
@@ -211,10 +210,7 @@ class _DarkBackground extends StatelessWidget {
                 gradient: RadialGradient(
                   center: Alignment.topCenter,
                   radius: 1.2,
-                  colors: [
-                    Colors.white.withOpacity(0.06),
-                    Colors.transparent,
-                  ],
+                  colors: [Colors.white.withOpacity(0.06), Colors.transparent],
                 ),
               ),
             ),
@@ -321,8 +317,11 @@ class _LeftBrandPanel extends StatelessWidget {
                   color: Colors.white.withOpacity(0.06),
                   border: Border.all(color: Colors.white.withOpacity(0.10)),
                 ),
-                child: Icon(Icons.route_rounded,
-                    color: Colors.white.withOpacity(0.85), size: 26),
+                child: Icon(
+                  Icons.route_rounded,
+                  color: Colors.white.withOpacity(0.85),
+                  size: 26,
+                ),
               ),
               const SizedBox(width: 12),
               Column(
@@ -454,7 +453,10 @@ class _RightHeader extends StatelessWidget {
             color: Colors.white.withOpacity(0.06),
             border: Border.all(color: Colors.white.withOpacity(0.10)),
           ),
-          child: Icon(Icons.login_rounded, color: Colors.white.withOpacity(0.85)),
+          child: Icon(
+            Icons.login_rounded,
+            color: Colors.white.withOpacity(0.85),
+          ),
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -473,7 +475,10 @@ class _RightHeader extends StatelessWidget {
                   ),
                   const SizedBox(width: 10),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(999),
                       color: const Color(0xFF53D6FF).withOpacity(0.12),
@@ -579,7 +584,9 @@ class _Choice extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bg = selected ? accent.withOpacity(0.10) : Colors.transparent;
-    final br = selected ? accent.withOpacity(0.40) : Colors.white.withOpacity(0.10);
+    final br = selected
+        ? accent.withOpacity(0.40)
+        : Colors.white.withOpacity(0.10);
 
     return InkWell(
       borderRadius: BorderRadius.circular(14),
@@ -594,9 +601,11 @@ class _Choice extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(icon,
-                size: 20,
-                color: selected ? accent : Colors.white.withOpacity(0.75)),
+            Icon(
+              icon,
+              size: 20,
+              color: selected ? accent : Colors.white.withOpacity(0.75),
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
@@ -614,7 +623,11 @@ class _Choice extends StatelessWidget {
                         ),
                       ),
                       if (selected)
-                        Icon(Icons.check_circle_rounded, size: 18, color: accent),
+                        Icon(
+                          Icons.check_circle_rounded,
+                          size: 18,
+                          color: accent,
+                        ),
                     ],
                   ),
                   const SizedBox(height: 3),
@@ -690,7 +703,9 @@ class _GuestBlock extends StatelessWidget {
             style: OutlinedButton.styleFrom(
               foregroundColor: accent,
               side: BorderSide(color: accent.withOpacity(0.55), width: 1.2),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
               backgroundColor: Colors.transparent,
             ),
           ),
@@ -745,7 +760,9 @@ class _ExistingForm extends StatelessWidget {
             onPressed: onToggleHide,
             tooltip: hidePassword ? 'Göster' : 'Gizle',
             icon: Icon(
-              hidePassword ? Icons.visibility_rounded : Icons.visibility_off_rounded,
+              hidePassword
+                  ? Icons.visibility_rounded
+                  : Icons.visibility_off_rounded,
             ),
           ),
         ),
@@ -763,7 +780,9 @@ class _ExistingForm extends StatelessWidget {
               backgroundColor: accent.withOpacity(0.16),
               foregroundColor: accent,
               side: BorderSide(color: accent.withOpacity(0.55), width: 1.2),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
               elevation: 0,
             ),
             child: isSubmitting
