@@ -4,7 +4,7 @@ extension RepeatTypeLabel on RepeatType {
   String get label {
     switch (this) {
       case RepeatType.none:
-        return 'Tek Sefer';
+        return 'Tek Seferlik';
       case RepeatType.daily:
         return 'Günlük';
       case RepeatType.weekly:
@@ -21,26 +21,40 @@ extension RepeatTypeLabel on RepeatType {
       case RepeatType.daily:
         return 'Gün';
       case RepeatType.weekly:
-        return 'Hafta';
+        return 'Hft';
       case RepeatType.monthly:
         return 'Ay';
     }
   }
 }
 
-class CalendarEvent {
+/// Saat yok → gün içi "ziyaret sırası" var.
+/// Tekrar yönetimi için seriesId kullanıyoruz.
+class VisitPlanItem {
   final String title;
-  final DateTime start;
-  final DateTime end;
   final RepeatType repeat;
-
   final String? note;
 
-  CalendarEvent({
+  /// Aynı tekrara ait tüm kopyalar aynı seriesId taşır.
+  final String seriesId;
+
+  const VisitPlanItem({
     required this.title,
-    required this.start,
-    required this.end,
+    required this.seriesId,
     this.repeat = RepeatType.none,
     this.note,
   });
+
+  VisitPlanItem copyWith({
+    RepeatType? repeat,
+    String? note,
+    bool keepNoteWhenNull = true,
+  }) {
+    return VisitPlanItem(
+      title: title,
+      seriesId: seriesId,
+      repeat: repeat ?? this.repeat,
+      note: (note == null && keepNoteWhenNull) ? this.note : note,
+    );
+  }
 }
