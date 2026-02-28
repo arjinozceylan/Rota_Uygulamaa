@@ -419,6 +419,12 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    // compute a darker variant for any blue text elements
+    final primary = cs.primary;
+    final darkPrimary = HSLColor.fromColor(primary)
+        .withLightness((HSLColor.fromColor(primary).lightness * 0.6)
+            .clamp(0.0, 1.0))
+        .toColor();
 
     if (!filterItems.contains(selectedFilter)) {
       selectedFilter = 'Adresler';
@@ -430,350 +436,372 @@ class _HomePageState extends State<HomePage> {
       selectedStartAddress = null;
     }
 
-    return Scaffold(
-      backgroundColor: const Color(0xFF0B1018),
-      body: Row(
-        children: [
-          Container(
-            width: 280,
-            color: const Color(0xFF0F1624).withOpacity(0.85),
-            padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
-            child: _HomeSidebar(
-              primaryColor: cs.primary,
-              onUploadPressed: _importAddressesFromExcel,
-              onCalendarPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const CalendarPage()),
-                ).then((_) {
-                  setState(() {
-                    for (final a in AddressStore.items) {
-                      final text = a.address;
-                      if (!filterItems.contains(text)) filterItems.add(text);
-                    }
+    // light version of home page, override only this subtree
+    final lightBg = Colors.grey[50]!;
+    final lightSidebar = Colors.grey[200]!.withOpacity(0.85);
+    final lightPanel = Colors.white.withOpacity(0.95);
+    final lightPanelBorder = Colors.black12;
+    const lightText = Colors.black87;
+    const lightSecondary = Colors.black54;
+
+    return Theme(
+      data: ThemeData.light().copyWith(
+        colorScheme: ThemeData.light().colorScheme.copyWith(
+          primary: cs.primary,
+        ),
+      ),
+      child: Scaffold(
+        backgroundColor: lightBg,
+        body: Row(
+          children: [
+            Container(
+              width: 280,
+              color: lightSidebar,
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+              child: _HomeSidebar(
+                primaryColor: cs.primary,
+                onUploadPressed: _importAddressesFromExcel,
+                onCalendarPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const CalendarPage()),
+                  ).then((_) {
+                    setState(() {
+                      for (final a in AddressStore.items) {
+                        final text = a.address;
+                        if (!filterItems.contains(text)) filterItems.add(text);
+                      }
+                    });
                   });
-                });
-              },
+                },
+              ),
             ),
-          ),
 
-          Expanded(
-            child: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 20,
-                ),
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        FilledButton(
-                          onPressed: _openMapPicker,
-                          child: const Text('Haritadan Seç'),
-                        ),
-                        const SizedBox(width: 8),
-                        OutlinedButton(
-                          onPressed: _addManualAddress,
-                          child: const Text('Elle Yaz'),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-
-                    Expanded(
-                      child: Row(
+            Expanded(
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 20,
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
                         children: [
-                          Expanded(
-                            flex: 2,
-                            child: Card(
-                              color: const Color(0xFF0F1624).withOpacity(0.80),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                                side: BorderSide(
-                                  color: Colors.white.withOpacity(0.08),
+                          FilledButton(
+                            onPressed: _openMapPicker,
+                            child: const Text('Haritadan Seç'),
+                          ),
+                          const SizedBox(width: 8),
+                          OutlinedButton(
+                            onPressed: _addManualAddress,
+                            child: const Text('Elle Yaz'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+
+                      Expanded(
+                        child: Row(
+                          children: [
+                            Expanded(
+                              flex: 2,
+                              child: Card(
+                                color: lightPanel,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  side: BorderSide(color: lightPanelBorder),
                                 ),
-                              ),
-                              child: Padding(
-                                padding: const EdgeInsets.all(16),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text(
-                                      'Adres Arama Paneli',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w800,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 12),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 8,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: const Color(
-                                          0xFF141B26,
-                                        ).withOpacity(0.85),
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(
-                                          color: Colors.white.withOpacity(0.10),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        'Adres Arama Paneli',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w800,
+                                          color: lightText,
                                         ),
                                       ),
-                                      child: Row(
-                                        children: [
-                                          Icon(Icons.search, color: cs.primary),
-                                          const SizedBox(width: 8),
-                                          Expanded(
-                                            child: TextField(
-                                              controller: searchCtrl,
-                                              decoration: const InputDecoration(
-                                                hintText: 'Haritadan adres ara',
-                                                border: InputBorder.none,
-                                              ),
-                                            ),
+                                      const SizedBox(height: 12),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 8,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Colors.grey[100]!.withOpacity(
+                                            0.85,
                                           ),
-                                          if (isSearching)
-                                            SizedBox(
-                                              width: 18,
-                                              height: 18,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                                color: cs.primary,
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                          border: Border.all(
+                                            color: lightPanelBorder,
+                                          ),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Icon(
+                                              Icons.search,
+                                              color: cs.primary,
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: TextField(
+                                                controller: searchCtrl,
+                                                decoration:
+                                                    const InputDecoration(
+                                                      hintText:
+                                                          'Haritadan adres ara',
+                                                      border: InputBorder.none,
+                                                    ),
                                               ),
                                             ),
-                                          const SizedBox(width: 6),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 8,
-                                              vertical: 5,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: cs.primary.withOpacity(
-                                                0.10,
+                                            if (isSearching)
+                                              SizedBox(
+                                                width: 18,
+                                                height: 18,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                      strokeWidth: 2,
+                                                      color: cs.primary,
+                                                    ),
                                               ),
-                                              borderRadius:
-                                                  BorderRadius.circular(999),
-                                              border: Border.all(
+                                            const SizedBox(width: 6),
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 8,
+                                                    vertical: 5,
+                                                  ),
+                                              decoration: BoxDecoration(
                                                 color: cs.primary.withOpacity(
-                                                  0.18,
+                                                  0.10,
+                                                ),
+                                                borderRadius:
+                                                    BorderRadius.circular(999),
+                                                border: Border.all(
+                                                  color: cs.primary.withOpacity(
+                                                    0.18,
+                                                  ),
+                                                ),
+                                              ),
+                                              child: Text(
+                                                'Google',
+                                                style: TextStyle(
+                                                  color: darkPrimary,
+                                                  fontWeight: FontWeight.w700,
+                                                  fontSize: 12,
                                                 ),
                                               ),
                                             ),
-                                            child: Text(
-                                              'Google',
-                                              style: TextStyle(
-                                                color: cs.primary,
-                                                fontWeight: FontWeight.w700,
-                                                fontSize: 12,
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      if (suggestions.isNotEmpty)
+                                        Expanded(
+                                          child: Container(
+                                            decoration: BoxDecoration(
+                                              color: lightPanel.withOpacity(
+                                                0.90,
                                               ),
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                              border: Border.all(
+                                                color: lightPanelBorder,
+                                              ),
+                                            ),
+                                            child: ListView.separated(
+                                              itemCount: suggestions.length,
+                                              separatorBuilder: (_, __) =>
+                                                  const Divider(height: 1),
+                                              itemBuilder: (c, i) {
+                                                final addr = suggestions[i];
+                                                return ListTile(
+                                                  leading: Icon(
+                                                    Icons.place_outlined,
+                                                    color: cs.primary,
+                                                  ),
+                                                  title: Text(
+                                                    addr.address,
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: const TextStyle(
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      color: lightSecondary,
+                                                    ),
+                                                  ),
+                                                  trailing: TextButton(
+                                                    onPressed: () {
+                                                      _addAddressToPoolAndCards(
+                                                        addr,
+                                                      );
+                                                      _dropAddress(
+                                                        addr.address,
+                                                      );
+                                                    },
+                                                    child: const Text('Seç'),
+                                                  ),
+                                                );
+                                              },
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+
+                            const SizedBox(width: 20),
+
+                            Expanded(
+                              flex: 1,
+                              child: Card(
+                                color: lightPanel,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  side: BorderSide(color: lightPanelBorder),
+                                ),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          const Text(
+                                            'Seçili Adresler',
+                                            style: TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w700,
+                                              color: lightText,
+                                            ),
+                                          ),
+                                          Text(
+                                            dropped.length.toString(),
+                                            style: TextStyle(
+                                              fontSize: 20,
+                                              fontWeight: FontWeight.w800,
+                                              color: darkPrimary,
                                             ),
                                           ),
                                         ],
                                       ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    if (suggestions.isNotEmpty)
-                                      Expanded(
-                                        child: Container(
-                                          decoration: BoxDecoration(
-                                            color: const Color(
-                                              0xFF0F1624,
-                                            ).withOpacity(0.90),
-                                            borderRadius: BorderRadius.circular(
-                                              12,
-                                            ),
-                                            border: Border.all(
-                                              color: Colors.white.withOpacity(
-                                                0.08,
-                                              ),
-                                            ),
-                                          ),
-                                          child: ListView.separated(
-                                            itemCount: suggestions.length,
-                                            separatorBuilder: (_, __) =>
-                                                const Divider(height: 1),
-                                            itemBuilder: (c, i) {
-                                              final addr = suggestions[i];
-                                              return ListTile(
-                                                leading: Icon(
-                                                  Icons.place_outlined,
-                                                  color: cs.primary,
-                                                ),
-                                                title: Text(
-                                                  addr.address,
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: const TextStyle(
-                                                    fontWeight: FontWeight.w600,
-                                                    color: Colors.white70,
-                                                  ),
-                                                ),
-                                                trailing: TextButton(
-                                                  onPressed: () {
-                                                    _addAddressToPoolAndCards(
-                                                      addr,
-                                                    );
-                                                    _dropAddress(addr.address);
-                                                  },
-                                                  child: const Text('Seç'),
-                                                ),
-                                              );
-                                            },
-                                          ),
+                                      const Text(
+                                        'ROTA KUYRUĞU',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: lightSecondary,
                                         ),
                                       ),
-                                  ],
+                                      const SizedBox(height: 20),
+                                      Expanded(
+                                        child: DragTarget<String>(
+                                          onWillAccept: (_) => true,
+                                          onAccept: _dropAddress,
+                                          builder:
+                                              (
+                                                context,
+                                                candidateData,
+                                                rejectedData,
+                                              ) {
+                                                if (dropped.isEmpty) {
+                                                  return Container(
+                                                    decoration: BoxDecoration(
+                                                      border: Border.all(
+                                                        color: Colors.black26,
+                                                        width: 2,
+                                                      ),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            12,
+                                                          ),
+                                                    ),
+                                                    child: const Center(
+                                                      child: Text(
+                                                        'Henüz Adres Seçilmedi',
+                                                        style: TextStyle(
+                                                          color: lightSecondary,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  );
+                                                }
+                                                return ListView(
+                                                  children: dropped
+                                                      .map(
+                                                        (a) => _AddressChip(
+                                                          text: a,
+                                                          onRemove: () {
+                                                            setState(() {
+                                                              dropped.remove(a);
+                                                            });
+                                                          },
+                                                        ),
+                                                      )
+                                                      .toList(),
+                                                );
+                                              },
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
+                          ],
+                        ),
+                      ),
 
-                          const SizedBox(width: 20),
+                      const SizedBox(height: 20),
 
+                      Row(
+                        children: [
                           Expanded(
-                            flex: 1,
-                            child: Card(
-                              color: const Color(0xFF0F1624).withOpacity(0.80),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                                side: BorderSide(
-                                  color: Colors.white.withOpacity(0.08),
-                                ),
-                              ),
-                              child: Padding(
-                                padding: const EdgeInsets.all(16),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        const Text(
-                                          'Seçili Adresler',
-                                          style: TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w700,
-                                            color: Colors.white,
-                                          ),
-                                        ),
-                                        Text(
-                                          dropped.length.toString(),
-                                          style: TextStyle(
-                                            fontSize: 20,
-                                            fontWeight: FontWeight.w800,
-                                            color: cs.primary,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const Text(
-                                      'ROTA KUYRUĞU',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.white54,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 20),
-                                    Expanded(
-                                      child: DragTarget<String>(
-                                        onWillAccept: (_) => true,
-                                        onAccept: _dropAddress,
-                                        builder:
-                                            (
-                                              context,
-                                              candidateData,
-                                              rejectedData,
-                                            ) {
-                                              if (dropped.isEmpty) {
-                                                return Container(
-                                                  decoration: BoxDecoration(
-                                                    border: Border.all(
-                                                      color: Colors.black26,
-                                                      width: 2,
-                                                    ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          12,
-                                                        ),
-                                                  ),
-                                                  child: const Center(
-                                                    child: Text(
-                                                      'Henüz Adres Seçilmedi',
-                                                      style: TextStyle(
-                                                        color: Colors.white54,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                );
-                                              }
-                                              return ListView(
-                                                children: dropped
-                                                    .map(
-                                                      (a) => _AddressChip(
-                                                        text: a,
-                                                        onRemove: () {
-                                                          setState(() {
-                                                            dropped.remove(a);
-                                                          });
-                                                        },
-                                                      ),
-                                                    )
-                                                    .toList(),
-                                              );
-                                            },
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
+                            child: OutlinedButton.icon(
+                              onPressed: dropped.isEmpty
+                                  ? null
+                                  : () => setState(() {
+                                      dropped.clear();
+                                      repeatByAddress.clear();
+                                      selectedStartAddress = null;
+                                    }),
+                              icon: const Icon(Icons.delete_outline),
+                              label: const Text('Temizle'),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: FilledButton.icon(
+                              onPressed: dropped.isEmpty
+                                  ? null
+                                  : () => _runDemoRoute(),
+                              icon: const Icon(Icons.route),
+                              label: const Text('Rota Oluştur'),
                             ),
                           ),
                         ],
                       ),
-                    ),
-
-                    const SizedBox(height: 20),
-
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: dropped.isEmpty
-                                ? null
-                                : () => setState(() {
-                                    dropped.clear();
-                                    repeatByAddress.clear();
-                                    selectedStartAddress = null;
-                                  }),
-                            icon: const Icon(Icons.delete_outline),
-                            label: const Text('Temizle'),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: FilledButton.icon(
-                            onPressed: dropped.isEmpty
-                                ? null
-                                : () => _runDemoRoute(),
-                            icon: const Icon(Icons.route),
-                            label: const Text('Rota Oluştur'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
-      ),
-    );
+          ],
+        ),
+      ), // close Scaffold
+    ); // close Theme
   }
 }
 
@@ -790,6 +818,9 @@ class _HomeSidebar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // light theme overrides for sidebar text
+    final textColor = Colors.black87;
+    final secondaryColor = Colors.black54;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -812,19 +843,19 @@ class _HomeSidebar extends StatelessWidget {
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
+                children: [
                   Text(
                     'Adres Havuzu',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w800,
-                      color: Colors.white,
+                      color: textColor,
                     ),
                   ),
                   SizedBox(height: 2),
                   Text(
                     'ÇEVRİMDIŞI MOD',
-                    style: TextStyle(fontSize: 11, color: Colors.white70),
+                    style: TextStyle(fontSize: 11, color: secondaryColor),
                   ),
                 ],
               ),
@@ -846,9 +877,9 @@ class _HomeSidebar extends StatelessWidget {
           onTap: onCalendarPressed,
         ),
         const Spacer(),
-        const Text(
+        Text(
           'Sürüm v2.4.0',
-          style: TextStyle(fontSize: 11, color: Colors.white54),
+          style: TextStyle(fontSize: 11, color: secondaryColor),
         ),
       ],
     );
@@ -865,6 +896,9 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // reuse colors defined in sidebar parent if possible
+    final iconColor = Colors.black54;
+    final textColor = Colors.black87;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
@@ -872,12 +906,9 @@ class _NavItem extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 8),
         child: Row(
           children: [
-            Icon(icon, size: 20, color: Colors.white70),
+            Icon(icon, size: 20, color: iconColor),
             const SizedBox(width: 8),
-            Text(
-              label,
-              style: const TextStyle(fontSize: 14, color: Colors.white),
-            ),
+            Text(label, style: TextStyle(fontSize: 14, color: textColor)),
           ],
         ),
       ),
