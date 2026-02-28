@@ -422,8 +422,9 @@ class _HomePageState extends State<HomePage> {
     // compute a darker variant for any blue text elements
     final primary = cs.primary;
     final darkPrimary = HSLColor.fromColor(primary)
-        .withLightness((HSLColor.fromColor(primary).lightness * 0.6)
-            .clamp(0.0, 1.0))
+        .withLightness(
+          (HSLColor.fromColor(primary).lightness * 0.6).clamp(0.0, 1.0),
+        )
         .toColor();
 
     if (!filterItems.contains(selectedFilter)) {
