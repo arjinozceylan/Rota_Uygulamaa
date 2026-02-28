@@ -19,14 +19,16 @@ class MyApp extends StatelessWidget {
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      themeMode: ThemeMode.dark, // ✅ her zaman dark
+      themeMode: ThemeMode.dark,
       darkTheme: ThemeData(
         useMaterial3: true,
         colorScheme: darkScheme,
         scaffoldBackgroundColor: const Color(0xFF0B1018),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
             padding: const EdgeInsets.symmetric(horizontal: 16),
             foregroundColor: Colors.white,
           ),
@@ -34,7 +36,10 @@ class MyApp extends StatelessWidget {
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
           fillColor: const Color(0xFF141B26).withOpacity(0.85),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: 14,
+          ),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
             borderSide: BorderSide(color: Colors.white.withOpacity(0.08)),

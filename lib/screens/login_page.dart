@@ -59,105 +59,112 @@ class _LoginPageState extends State<LoginPage> {
         children: [
           const _DarkBackground(),
 
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1020),
-                child: LayoutBuilder(
-                  builder: (context, c) {
-                    final wide = c.maxWidth >= 760;
+          Row(
+            children: [
+              // Left sidebar - brand panel
+              Container(
+                width: 280,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0F1624).withOpacity(0.85),
+                  border: Border(
+                    right: BorderSide(
+                      color: Colors.white.withOpacity(0.08),
+                      width: 1,
+                    ),
+                  ),
+                ),
+                child: const _LeftBrandPanel(),
+              ),
 
-                    return _DarkGlassCard(
-                      child: Row(
-                        children: [
-                          if (wide)
-                            const Expanded(flex: 5, child: _LeftBrandPanel()),
-                          Expanded(
-                            flex: wide ? 6 : 1,
-                            child: Padding(
-                              padding: EdgeInsets.fromLTRB(
-                                wide ? 28 : 22,
-                                22,
-                                wide ? 28 : 22,
-                                20,
-                              ),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  const _RightHeader(),
-
-                                  const SizedBox(height: 14),
-
-                                  _ModeSwitch(
-                                    mode: mode,
-                                    accent: accent,
-                                    onChanged: (m) => setState(() => mode = m),
-                                  ),
-
-                                  const SizedBox(height: 12),
-
-                                  AnimatedSwitcher(
-                                    duration: const Duration(milliseconds: 220),
-                                    switchInCurve: Curves.easeOutCubic,
-                                    switchOutCurve: Curves.easeInCubic,
-                                    transitionBuilder: (child, anim) {
-                                      return FadeTransition(
-                                        opacity: anim,
-                                        child: SlideTransition(
-                                          position: Tween<Offset>(
-                                            begin: const Offset(0, 0.03),
-                                            end: Offset.zero,
-                                          ).animate(anim),
-                                          child: child,
-                                        ),
-                                      );
-                                    },
-                                    child: mode == _LoginMode.existing
-                                        ? _ExistingForm(
-                                            key: const ValueKey('existingForm'),
-                                            usernameCtrl: usernameCtrl,
-                                            passwordCtrl: passwordCtrl,
-                                            hidePassword: hidePassword,
-                                            onToggleHide: () => setState(
-                                              () =>
-                                                  hidePassword = !hidePassword,
-                                            ),
-                                            onLogin: isSubmitting
-                                                ? null
-                                                : _loginExisting,
-                                            isSubmitting: isSubmitting,
-                                            accent: accent,
-                                          )
-                                        : _GuestBlock(
-                                            key: const ValueKey('guestBlock'),
-                                            accent: accent,
-                                            onContinue: _goHome,
-                                          ),
-                                  ),
-
-                                  const SizedBox(height: 12),
-
-                                  Text(
-                                    'Not: Mevcut kullanıcı hesapları uygulama geliştiricileri tarafından tanımlanır.',
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.white.withOpacity(0.42),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
+              // Right content area
+              Expanded(
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 40,
+                      vertical: 32,
+                    ),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 480),
+                      child: _DarkGlassCard(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 28,
+                            vertical: 22,
                           ),
-                        ],
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              const _RightHeader(),
+
+                              const SizedBox(height: 14),
+
+                              _ModeSwitch(
+                                mode: mode,
+                                accent: accent,
+                                onChanged: (m) => setState(() => mode = m),
+                              ),
+
+                              const SizedBox(height: 12),
+
+                              AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 220),
+                                switchInCurve: Curves.easeOutCubic,
+                                switchOutCurve: Curves.easeInCubic,
+                                transitionBuilder: (child, anim) {
+                                  return FadeTransition(
+                                    opacity: anim,
+                                    child: SlideTransition(
+                                      position: Tween<Offset>(
+                                        begin: const Offset(0, 0.03),
+                                        end: Offset.zero,
+                                      ).animate(anim),
+                                      child: child,
+                                    ),
+                                  );
+                                },
+                                child: mode == _LoginMode.existing
+                                    ? _ExistingForm(
+                                        key: const ValueKey('existingForm'),
+                                        usernameCtrl: usernameCtrl,
+                                        passwordCtrl: passwordCtrl,
+                                        hidePassword: hidePassword,
+                                        onToggleHide: () => setState(
+                                          () => hidePassword = !hidePassword,
+                                        ),
+                                        onLogin: isSubmitting
+                                            ? null
+                                            : _loginExisting,
+                                        isSubmitting: isSubmitting,
+                                        accent: accent,
+                                      )
+                                    : _GuestBlock(
+                                        key: const ValueKey('guestBlock'),
+                                        accent: accent,
+                                        onContinue: _goHome,
+                                      ),
+                              ),
+
+                              const SizedBox(height: 12),
+
+                              Text(
+                                'Not: Mevcut kullanıcı hesapları uygulama geliştiricileri tarafından tanımlanır.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.white.withOpacity(0.42),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
-                    );
-                  },
+                    ),
+                  ),
                 ),
               ),
-            ),
+            ],
           ),
         ],
       ),

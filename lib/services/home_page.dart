@@ -10,7 +10,6 @@ import '../models/calendar_event.dart';
 import '../core/models/address.dart';
 import '../screens/osm_places_service.dart';
 import '../widgets/center_drop_card.dart';
-import '../widgets/top_action_bar.dart';
 import '../screens/calendar_page.dart';
 import '../screens/map_picker_page.dart';
 import 'osrm_route_service.dart';
@@ -207,67 +206,6 @@ class _HomePageState extends State<HomePage> {
         }
       });
     }
-  }
-
-  void _showAppInfo(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (_) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxHeight: MediaQuery.of(context).size.height * 0.82,
-              ),
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    SizedBox(height: 8),
-                    Text(
-                      'Uygulama Bilgisi',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    SizedBox(height: 10),
-                    _InfoSection(
-                      title: 'Genel',
-                      body:
-                          'Uygulama, masaüstü + mobil olmak üzere iki parçadan oluşan bir rota planlama ve navigasyon sistemidir.',
-                    ),
-                    _InfoSection(
-                      title: 'Adres Havuzu',
-                      body:
-                          'Adresler veritabanında tutulur ve gerektiğinde Excel ile toplu içeri alınabilir. Toplam adres sayısı 5000+ olabilir; ancak günlük rota pratikte ~20 adres ile sınırlıdır.',
-                    ),
-                    _InfoSection(
-                      title: 'Optimizasyon Hedefi',
-                      body:
-                          '“En kısa rota” toplam süre minimizasyonudur (mesafe değil). Başlangıç/bitiş kullanıcıdan sabit alınmaz: mobilde cihaz konumu başlangıç kabul edilir ve rota başlangıca geri döner.',
-                    ),
-                    _InfoSection(
-                      title: 'Masaüstü vs Mobil',
-                      body:
-                          'Masaüstü planlar (takvim + havuz) → mobil navigasyon yapar (uygulama içi). Aynı hesapla senkron çalışır.',
-                    ),
-                    SizedBox(height: 8),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
   }
 
   // ✅ CSV import (Google Sheets / LibreOffice / Not Defteri)
@@ -493,182 +431,454 @@ class _HomePageState extends State<HomePage> {
     }
 
     return Scaffold(
-      body: SafeArea(
-        child: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [Color(0xFFEAF6EC), Color(0xFFDDEEE0)],
+      backgroundColor: const Color(0xFF0B1018),
+      body: Row(
+        children: [
+          Container(
+            width: 280,
+            color: const Color(0xFF0F1624).withOpacity(0.85),
+            padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+            child: _HomeSidebar(
+              primaryColor: cs.primary,
+              onUploadPressed: _importAddressesFromExcel,
+              onCalendarPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const CalendarPage()),
+                ).then((_) {
+                  setState(() {
+                    for (final a in AddressStore.items) {
+                      final text = a.address;
+                      if (!filterItems.contains(text)) filterItems.add(text);
+                    }
+                  });
+                });
+              },
             ),
           ),
-          child: Column(
-            children: [
-              Padding(
+
+          Expanded(
+            child: SafeArea(
+              child: Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 20,
-                  vertical: 16,
+                  vertical: 20,
                 ),
-                child: TopActionBar(
-                  filterValue: selectedFilter,
-                  filterItems: filterItems,
-                  onFilterChanged: (v) {
-                    setState(() => selectedFilter = v);
-                    if (v != 'Adresler') {
-                      _addAddressToPoolAndCards(_makeManualAddress(v));
-                    }
-                  },
-                  primaryColor: cs.primary,
-                  selectedCount: dropped.length,
-                  maxCount: maxDaily,
-                  syncStatus: syncStatus,
-                  onInfoPressed: () => _showAppInfo(context),
-                  onUploadPressed: _importAddressesFromExcel,
-                  onCalendarPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const CalendarPage()),
-                    ).then((_) {
-                      setState(() {
-                        for (final a in AddressStore.items) {
-                          final text = a.address;
-                          if (!filterItems.contains(text))
-                            filterItems.add(text);
-                        }
-                      });
-                    });
-                  },
-                ),
-              ),
-              const SizedBox(height: 12),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: addressCards.map((a) {
-                    return Draggable<String>(
-                      data: a,
-                      feedback: Material(
-                        color: Colors.transparent,
-                        child: _AddressChip(text: a, ghost: true),
-                      ),
-                      childWhenDragging: Opacity(
-                        opacity: 0.35,
-                        child: _AddressChip(text: a),
-                      ),
-                      child: _AddressChip(
-                        text: a,
-                        onRemove: () {
-                          setState(() {
-                            addressCards.remove(a);
-                            AddressStore.removeByAddress(a);
-                            filterItems.remove(a);
-
-                            if (selectedStartAddress == a) {
-                              selectedStartAddress = null;
-                            }
-
-                            if (!filterItems.contains(selectedFilter)) {
-                              selectedFilter = 'Adresler';
-                            }
-                          });
-                        },
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Column(
-                    children: [
-                      Expanded(
-                        child: CenterDropCard(
-                          droppedAddresses: dropped,
-                          onDropAddress: _dropAddress,
-                          maxCount: maxDaily,
-                          repeatByAddress: repeatByAddress,
-                          searchController: searchCtrl,
-                          manualAddressController: manualAddressCtrl,
-                          inputMode: inputMode,
-                          onInputModeChanged: (mode) {
-                            setState(() {
-                              inputMode = mode;
-                              suggestions = <Address>[];
-                              searchCtrl.clear();
-                            });
-
-                            // Haritadan Seç moduna geçildiyse harita sayfasını aç
-                            if (mode == AddressInputMode.maps) {
-                              _openMapPicker();
-                            }
-                          },
-                          onManualAddressAdd: _addManualAddress,
-                          suggestions: suggestions
-                              .map((a) => a.address)
-                              .toList(),
-                          isSearching: isSearching,
-                          onSuggestionTap: (s) {
-                            final match = suggestions
-                                .where((a) => a.address == s)
-                                .toList();
-
-                            if (match.isNotEmpty) {
-                              _addAddressToPoolAndCards(
-                                match.first,
-                              ); // ✅ lat/lng kaybolmaz
-                            } else {
-                              _addAddressToPoolAndCards(_makeManualAddress(s));
-                            }
-
-                            setState(() {
-                              searchCtrl.clear();
-                              suggestions =
-                                  <Address>[]; // ✅ artık List<Address>
-                            });
-                          },
-                          helperText:
-                              'Kartları buraya sürükle. (Hedef: süre minimizasyonu)',
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        FilledButton(
+                          onPressed: _openMapPicker,
+                          child: const Text('Haritadan Seç'),
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
+                        const SizedBox(width: 8),
+                        OutlinedButton(
+                          onPressed: _addManualAddress,
+                          child: const Text('Elle Yaz'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+
+                    Expanded(
+                      child: Row(
                         children: [
                           Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: dropped.isEmpty
-                                  ? null
-                                  : () => setState(() {
-                                      dropped.clear();
-                                      repeatByAddress.clear();
-                                      selectedStartAddress = null;
-                                    }),
-                              icon: const Icon(Icons.delete_outline),
-                              label: const Text('Temizle'),
+                            flex: 2,
+                            child: Card(
+                              color: const Color(0xFF0F1624).withOpacity(0.80),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                side: BorderSide(
+                                  color: Colors.white.withOpacity(0.08),
+                                ),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Adres Arama Paneli',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w800,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 8,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: const Color(
+                                          0xFF141B26,
+                                        ).withOpacity(0.85),
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: Colors.white.withOpacity(0.10),
+                                        ),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.search, color: cs.primary),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: TextField(
+                                              controller: searchCtrl,
+                                              decoration: const InputDecoration(
+                                                hintText: 'Haritadan adres ara',
+                                                border: InputBorder.none,
+                                              ),
+                                            ),
+                                          ),
+                                          if (isSearching)
+                                            SizedBox(
+                                              width: 18,
+                                              height: 18,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                                color: cs.primary,
+                                              ),
+                                            ),
+                                          const SizedBox(width: 6),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 8,
+                                              vertical: 5,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: cs.primary.withOpacity(
+                                                0.10,
+                                              ),
+                                              borderRadius:
+                                                  BorderRadius.circular(999),
+                                              border: Border.all(
+                                                color: cs.primary.withOpacity(
+                                                  0.18,
+                                                ),
+                                              ),
+                                            ),
+                                            child: Text(
+                                              'Google',
+                                              style: TextStyle(
+                                                color: cs.primary,
+                                                fontWeight: FontWeight.w700,
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    if (suggestions.isNotEmpty)
+                                      Expanded(
+                                        child: Container(
+                                          decoration: BoxDecoration(
+                                            color: const Color(
+                                              0xFF0F1624,
+                                            ).withOpacity(0.90),
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                            border: Border.all(
+                                              color: Colors.white.withOpacity(
+                                                0.08,
+                                              ),
+                                            ),
+                                          ),
+                                          child: ListView.separated(
+                                            itemCount: suggestions.length,
+                                            separatorBuilder: (_, __) =>
+                                                const Divider(height: 1),
+                                            itemBuilder: (c, i) {
+                                              final addr = suggestions[i];
+                                              return ListTile(
+                                                leading: Icon(
+                                                  Icons.place_outlined,
+                                                  color: cs.primary,
+                                                ),
+                                                title: Text(
+                                                  addr.address,
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: const TextStyle(
+                                                    fontWeight: FontWeight.w600,
+                                                    color: Colors.white70,
+                                                  ),
+                                                ),
+                                                trailing: TextButton(
+                                                  onPressed: () {
+                                                    _addAddressToPoolAndCards(
+                                                      addr,
+                                                    );
+                                                    _dropAddress(addr.address);
+                                                  },
+                                                  child: const Text('Seç'),
+                                                ),
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
                             ),
                           ),
-                          const SizedBox(width: 12),
+
+                          const SizedBox(width: 20),
+
                           Expanded(
-                            child: FilledButton.icon(
-                              onPressed: dropped.isEmpty
-                                  ? null
-                                  : () => _runDemoRoute(),
-                              icon: const Icon(Icons.route),
-                              label: const Text('Rota Oluştur'),
+                            flex: 1,
+                            child: Card(
+                              color: const Color(0xFF0F1624).withOpacity(0.80),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                side: BorderSide(
+                                  color: Colors.white.withOpacity(0.08),
+                                ),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        const Text(
+                                          'Seçili Adresler',
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w700,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                        Text(
+                                          dropped.length.toString(),
+                                          style: TextStyle(
+                                            fontSize: 20,
+                                            fontWeight: FontWeight.w800,
+                                            color: cs.primary,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const Text(
+                                      'ROTA KUYRUĞU',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.white54,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 20),
+                                    Expanded(
+                                      child: DragTarget<String>(
+                                        onWillAccept: (_) => true,
+                                        onAccept: _dropAddress,
+                                        builder:
+                                            (
+                                              context,
+                                              candidateData,
+                                              rejectedData,
+                                            ) {
+                                              if (dropped.isEmpty) {
+                                                return Container(
+                                                  decoration: BoxDecoration(
+                                                    border: Border.all(
+                                                      color: Colors.black26,
+                                                      width: 2,
+                                                    ),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          12,
+                                                        ),
+                                                  ),
+                                                  child: const Center(
+                                                    child: Text(
+                                                      'Henüz Adres Seçilmedi',
+                                                      style: TextStyle(
+                                                        color: Colors.white54,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                );
+                                              }
+                                              return ListView(
+                                                children: dropped
+                                                    .map(
+                                                      (a) => _AddressChip(
+                                                        text: a,
+                                                        onRemove: () {
+                                                          setState(() {
+                                                            dropped.remove(a);
+                                                          });
+                                                        },
+                                                      ),
+                                                    )
+                                                    .toList(),
+                                              );
+                                            },
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 16),
-                    ],
-                  ),
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: dropped.isEmpty
+                                ? null
+                                : () => setState(() {
+                                    dropped.clear();
+                                    repeatByAddress.clear();
+                                    selectedStartAddress = null;
+                                  }),
+                            icon: const Icon(Icons.delete_outline),
+                            label: const Text('Temizle'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: FilledButton.icon(
+                            onPressed: dropped.isEmpty
+                                ? null
+                                : () => _runDemoRoute(),
+                            icon: const Icon(Icons.route),
+                            label: const Text('Rota Oluştur'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
-            ],
+            ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HomeSidebar extends StatelessWidget {
+  const _HomeSidebar({
+    required this.primaryColor,
+    required this.onUploadPressed,
+    required this.onCalendarPressed,
+  });
+
+  final Color primaryColor;
+  final VoidCallback onUploadPressed;
+  final VoidCallback onCalendarPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                color: primaryColor.withOpacity(0.15),
+              ),
+              child: Icon(
+                Icons.delivery_dining_rounded,
+                color: primaryColor,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: const [
+                  Text(
+                    'Adres Havuzu',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    'ÇEVRİMDIŞI MOD',
+                    style: TextStyle(fontSize: 11, color: Colors.white70),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 32),
+        _NavItem(icon: Icons.dashboard, label: 'Rota Paneli'),
+        const SizedBox(height: 16),
+        _NavItem(
+          icon: Icons.upload_file_rounded,
+          label: 'Excel Yükle',
+          onTap: onUploadPressed,
+        ),
+        const SizedBox(height: 16),
+        _NavItem(
+          icon: Icons.calendar_month_rounded,
+          label: 'Takvim',
+          onTap: onCalendarPressed,
+        ),
+        const Spacer(),
+        const Text(
+          'Sürüm v2.4.0',
+          style: TextStyle(fontSize: 11, color: Colors.white54),
+        ),
+      ],
+    );
+  }
+}
+
+// simple navigation item used in sidebar
+class _NavItem extends StatelessWidget {
+  const _NavItem({required this.icon, required this.label, this.onTap});
+
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          children: [
+            Icon(icon, size: 20, color: Colors.white70),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: const TextStyle(fontSize: 14, color: Colors.white),
+            ),
+          ],
         ),
       ),
     );
@@ -676,11 +886,10 @@ class _HomePageState extends State<HomePage> {
 }
 
 class _AddressChip extends StatelessWidget {
-  const _AddressChip({required this.text, this.onRemove, this.ghost = false});
+  const _AddressChip({required this.text, this.onRemove});
 
   final String text;
   final VoidCallback? onRemove;
-  final bool ghost;
 
   @override
   Widget build(BuildContext context) {
@@ -690,7 +899,7 @@ class _AddressChip extends StatelessWidget {
       constraints: const BoxConstraints(maxWidth: 280),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(ghost ? 0.9 : 1),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: cs.primary.withOpacity(0.18)),
         boxShadow: const [
@@ -722,31 +931,6 @@ class _AddressChip extends StatelessWidget {
               icon: const Icon(Icons.close),
             ),
           ],
-        ],
-      ),
-    );
-  }
-}
-
-class _InfoSection extends StatelessWidget {
-  const _InfoSection({required this.title, required this.body});
-
-  final String title;
-  final String body;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
-          const SizedBox(height: 6),
-          Text(
-            body,
-            style: const TextStyle(color: Colors.black87, height: 1.35),
-          ),
         ],
       ),
     );
