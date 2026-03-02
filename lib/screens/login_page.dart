@@ -37,27 +37,26 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _loginExisting() async {
-    final u = usernameCtrl.text.trim();
-    final p = passwordCtrl.text;
+    final username = usernameCtrl.text.trim();
+    final password = passwordCtrl.text;
 
-    if (u.isEmpty || p.isEmpty) {
+    if (username.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Kullanıcı adı ve şifre gir.')),
+        const SnackBar(content: Text("Kullanıcı adı ve şifre girin")),
       );
       return;
     }
 
     setState(() => isSubmitting = true);
 
-    final success = await AuthService.login(u, p);
-
+    final errorMessage = await AuthService.login(username, password);
     setState(() => isSubmitting = false);
 
-    if (success) {
+    if (errorMessage == null) {
       _goHome();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Kullanıcı adı veya şifre hatalı")),
+        SnackBar(content: Text(errorMessage), backgroundColor: Colors.red),
       );
     }
   }
