@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/home_page.dart';
+import '../services/auth_service.dart';
 
 enum _LoginMode { guest, existing }
 
@@ -47,9 +48,18 @@ class _LoginPageState extends State<LoginPage> {
     }
 
     setState(() => isSubmitting = true);
-    await Future<void>.delayed(const Duration(milliseconds: 450)); // demo
+
+    final success = await AuthService.login(u, p);
+
     setState(() => isSubmitting = false);
-    _goHome();
+
+    if (success) {
+      _goHome();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Kullanıcı adı veya şifre hatalı")),
+      );
+    }
   }
 
   @override
