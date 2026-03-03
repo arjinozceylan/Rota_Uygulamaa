@@ -5,142 +5,126 @@ import '../models/calendar_event.dart';
 import '../data/address_store.dart';
 import '../core/models/address.dart';
 
-class CalendarPage extends StatefulWidget {
-  const CalendarPage({super.key});
+// Vardiya tipi — VisitPlanItem.shift alanı ile eşleşir
+// (Aynı tanım calendar_event.dart/auth_service.dart'a da eklenecek)
 
-  @override
-  State<CalendarPage> createState() => _CalendarPageState();
+// ─────────────────────────────────────────────────────────────────────────────
+// TOKENS — ana sayfayla uyumlu renk paleti
+// ─────────────────────────────────────────────────────────────────────────────
+class _C {
+  static const bg        = Color(0xFFF0F4F8);
+  static const surface   = Color(0xFFFFFFFF);
+  static const sidebar   = Color(0xFF1A2236);
+  static const accent    = Color(0xFF53D6FF);
+  static const accentNav = Color(0xFF1A3A5C);
+  static const red       = Color(0xFFE53935);
+  static const green     = Color(0xFF43A047);
+  static const orange    = Color(0xFFFF8F00);
+  static const textDark  = Color(0xFF1A2236);
+  static const textMid   = Color(0xFF5A6A85);
+  static const textLight = Color(0xFF9DAFC8);
+  static const stroke    = Color(0xFFE2E8F0);
+  static const strokeMid = Color(0xFFCDD5E0);
+  static const today     = Color(0xFF1A3A5C);
+  static const cardBg    = Color(0xFFF7FAFF);
+}
+
+// Türkçe gün kısaltmaları
+const _dayNames  = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
+// Tüm günler için tek renk — lacivert/accent sistemi
+const _dayColors = [
+  Color(0xFF53D6FF),
+  Color(0xFF53D6FF),
+  Color(0xFF53D6FF),
+  Color(0xFF53D6FF),
+  Color(0xFF53D6FF),
+  Color(0xFF53D6FF),
+  Color(0xFF53D6FF),
+];
+
+enum ShiftType { morning, afternoon }
+
+extension ShiftLabel on ShiftType {
+  String get label => this == ShiftType.morning ? 'Sabah' : 'Öğleden Sonra';
+  String get short => this == ShiftType.morning ? 'SAB' : 'ÖS';
+  IconData get icon => this == ShiftType.morning
+      ? Icons.schedule_rounded
+      : Icons.access_time_filled_rounded;
+  // Her iki vardiya da aynı nötr renk sistemi
+  Color get color => const Color(0xFF5A6A85);
+  Color get bg    => const Color(0xFFF7FAFF);
 }
 
 class _MovePayload {
   final DateTime fromDay;
   final int fromIndex;
   final VisitPlanItem item;
-
+  final ShiftType shift;
   const _MovePayload({
     required this.fromDay,
     required this.fromIndex,
     required this.item,
+    required this.shift,
   });
 }
 
-class _CalendarPageState extends State<CalendarPage> {
-  // -------------------------
-  // Limits / horizon
-  // -------------------------
-  static const int maxDaily = 10;
+// ─────────────────────────────────────────────────────────────────────────────
+// CALENDAR PAGE
+// ─────────────────────────────────────────────────────────────────────────────
+class CalendarPage extends StatefulWidget {
+  const CalendarPage({super.key, this.onSendToRoute});
+
+  /// Seçili gündeki adresleri rota paneline gönderir
+  final void Function(List<String> addresses)? onSendToRoute;
+
+  @override
+  State<CalendarPage> createState() => _CalendarPageState();
+}
+
+class _CalendarPageState extends State<CalendarPage> with TickerProviderStateMixin {
+  static const int maxDaily         = 10;
   static const int repeatHorizonDays = 730;
 
-  // -------------------------
-  // Modern UI palette (yapıyı bozmaz, sadece görünüm)
-  // -------------------------
-  static const Color _bg = Color(0xFF0B0C10);
-  static const Color _panel = Color(0xFF121420);
-  static const Color _panel2 = Color(0xFF0F111A);
-  static const Color _borderStrong = Color(0x26FFFFFF); // 15%
-  static const Color _borderSoft = Color(0x14FFFFFF); // 8%
-  static const Color _text = Color(0xFFF5F7FF);
-  static const Color _muted = Color(0xB3FFFFFF); // 70%
-
-  BoxDecoration _glassBox({bool strong = false, double r = 18}) {
-    return BoxDecoration(
-      color: (strong ? _panel : _panel2).withOpacity(strong ? 0.62 : 0.46),
-      borderRadius: BorderRadius.circular(r),
-      border: Border.all(color: strong ? _borderStrong : _borderSoft),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(0.36),
-          blurRadius: 18,
-          offset: const Offset(0, 10),
-        ),
-      ],
-    );
-  }
-
-  Widget _glass({
-    required Widget child,
-    bool strong = false,
-    EdgeInsets? pad,
-    double radius = 18,
-  }) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(radius),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: Container(
-          padding: pad ?? const EdgeInsets.all(10),
-          decoration: _glassBox(strong: strong, r: radius),
-          child: child,
-        ),
-      ),
-    );
-  }
-
-  TextStyle get _tTitle => const TextStyle(
-        color: _text,
-        fontWeight: FontWeight.w800,
-        fontSize: 15,
-        letterSpacing: 0.2,
-      );
-
-  TextStyle get _tBody => const TextStyle(
-        color: _muted,
-        fontWeight: FontWeight.w600,
-        fontSize: 12.5,
-      );
-
-  Widget _pill(String text, {bool solid = false}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: solid ? Colors.white.withOpacity(0.12) : Colors.white.withOpacity(0.06),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withOpacity(0.10)),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: Colors.white.withOpacity(0.92),
-          fontSize: 12,
-          fontWeight: FontWeight.w800,
-          letterSpacing: 0.15,
-        ),
-      ),
-    );
-  }
-
-  // -------------------------
-  // Data
-  // -------------------------
   List<Address> get addresses => AddressStore.items;
   Address? selectedAddress;
 
-  late DateTime weekStart; // monday
+  late DateTime weekStart;
   late DateTime selectedDay;
+  // Gün → Vardiya → Görev listesi
+  final Map<DateTime, Map<ShiftType, List<VisitPlanItem>>> _planByDay = {};
 
-  /// Gün bazında sıralı plan
-  final Map<DateTime, List<VisitPlanItem>> _planByDay = {};
+  // animasyon — hafta geçişi
+  late AnimationController _weekCtrl;
+  late Animation<double> _weekFade;
 
   @override
   void initState() {
     super.initState();
     final now = DateTime.now();
-    weekStart = _startOfWeek(now);
+    weekStart  = _startOfWeek(now);
     selectedDay = _dateOnly(now);
+
+    _weekCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 260));
+    _weekFade = Tween<double>(begin: 0, end: 1)
+        .animate(CurvedAnimation(parent: _weekCtrl, curve: Curves.easeOut));
+    _weekCtrl.forward();
   }
 
-  // -------------------------
-  // Helpers
-  // -------------------------
-  DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+  @override
+  void dispose() {
+    _weekCtrl.dispose();
+    super.dispose();
+  }
 
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
   bool _sameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
+  bool _isToday(DateTime d) => _sameDay(d, DateTime.now());
 
   DateTime _startOfWeek(DateTime d) {
     final only = _dateOnly(d);
-    final diff = only.weekday - DateTime.monday;
-    return only.subtract(Duration(days: diff));
+    return only.subtract(Duration(days: only.weekday - DateTime.monday));
   }
 
   String _newSeriesId(String title) =>
@@ -148,90 +132,105 @@ class _CalendarPageState extends State<CalendarPage> {
 
   void _toast(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).clearSnackBars();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(
         content: Text(msg),
         behavior: SnackBarBehavior.floating,
-      ),
-    );
+        backgroundColor: _C.accentNav,
+      ));
   }
 
-  int _countForDay(DateTime dayKey) => (_planByDay[dayKey] ?? const []).length;
+  int _countForDay(DateTime dayKey) {
+    final m = _planByDay[dayKey];
+    if (m == null) return 0;
+    return (m[ShiftType.morning]?.length ?? 0) + (m[ShiftType.afternoon]?.length ?? 0);
+  }
 
-  List<VisitPlanItem> _listForDay(DateTime dayKey) =>
-      _planByDay.putIfAbsent(dayKey, () => <VisitPlanItem>[]);
+  int _countShift(DateTime dayKey, ShiftType shift) =>
+      (_planByDay[dayKey]?[shift] ?? const []).length;
 
-  // -------------------------
-  // Series ops
-  // -------------------------
+  List<VisitPlanItem> _listForShift(DateTime dayKey, ShiftType shift) {
+    final dayMap = _planByDay.putIfAbsent(dayKey, () => {});
+    return dayMap.putIfAbsent(shift, () => <VisitPlanItem>[]);
+  }
+
+  void _changeWeek(int direction) {
+    _weekCtrl.reset();
+    setState(() => weekStart = weekStart.add(Duration(days: 7 * direction)));
+    _weekCtrl.forward();
+  }
+
+  // ── Series ops (orijinalden değişmedi) ───────────────────────────────────
   void _removeSeriesEverywhere(String seriesId) {
-    final keys = _planByDay.keys.toList();
-    for (final k in keys) {
-      final list = _planByDay[k];
-      if (list == null) continue;
-
-      list.removeWhere((it) => it.seriesId == seriesId);
-
-      if (list.isEmpty) {
-        _planByDay.remove(k);
-      } else {
-        _planByDay[k] = list;
+    for (final dayMap in _planByDay.values) {
+      for (final list in dayMap.values) {
+        list.removeWhere((it) => it.seriesId == seriesId);
       }
     }
   }
 
-  bool _addItemToDay(DateTime dayKey, VisitPlanItem item) {
-    final list = _listForDay(dayKey);
+  bool _addItemToShift(DateTime dayKey, ShiftType shift, VisitPlanItem item) {
+    final list = _listForShift(dayKey, shift);
     if (list.length >= maxDaily) return false;
-
     list.add(item);
-    _planByDay[dayKey] = list;
     return true;
   }
 
-  void _addWithRepeat({required DateTime baseDay, required VisitPlanItem item}) {
+  void _addWithRepeat({required DateTime baseDay, required VisitPlanItem item, required ShiftType shift}) {
     final baseKey = _dateOnly(baseDay);
-
-    if (_countForDay(baseKey) >= maxDaily) {
-      _toast('Bu gün için limit dolu (max $maxDaily).');
+    if (_countShift(baseKey, shift) >= maxDaily) {
+      _toast('Bu vardiya için limit dolu (max $maxDaily).');
       return;
     }
-
-    _addItemToDay(baseKey, item);
-
+    _addItemToShift(baseKey, shift, item);
     if (item.repeat == RepeatType.none) return;
 
     int i = 1;
     while (i <= repeatHorizonDays) {
       DateTime occ;
       switch (item.repeat) {
-        case RepeatType.daily:
-          occ = baseKey.add(Duration(days: i));
-          break;
-        case RepeatType.weekly:
-          occ = baseKey.add(Duration(days: i * 7));
-          break;
-        case RepeatType.monthly:
-          occ = DateTime(baseKey.year, baseKey.month + i, baseKey.day);
-          occ = _dateOnly(occ);
-          break;
-        case RepeatType.none:
-          occ = baseKey;
-          break;
+        case RepeatType.daily:   occ = baseKey.add(Duration(days: i)); break;
+        case RepeatType.weekly:  occ = baseKey.add(Duration(days: i * 7)); break;
+        case RepeatType.monthly: occ = DateTime(baseKey.year, baseKey.month + i, baseKey.day); occ = _dateOnly(occ); break;
+        case RepeatType.none:    occ = baseKey; break;
       }
-
-      // doluysa o günü atla
-      if (_countForDay(occ) < maxDaily) {
-        _addItemToDay(occ, item);
-      }
+      if (_countShift(occ, shift) < maxDaily) _addItemToShift(occ, shift, item);
       i++;
     }
   }
 
-  // -------------------------
-  // Dialog (repeat + note)
-  // -------------------------
+  void _reorderWithinShift(DateTime dayKey, ShiftType shift, int oldIndex, int newIndex) {
+    final list = _planByDay[dayKey]?[shift];
+    if (list == null) return;
+    setState(() {
+      if (newIndex > oldIndex) newIndex -= 1;
+      final item = list.removeAt(oldIndex);
+      list.insert(newIndex, item);
+    });
+  }
+
+  void _moveItemToDay(_MovePayload payload, DateTime targetDay, ShiftType targetShift) {
+    final fromKey   = _dateOnly(payload.fromDay);
+    final toKey     = _dateOnly(targetDay);
+    final fromShift = payload.shift;
+
+    if (_sameDay(fromKey, toKey) && fromShift == targetShift) return;
+    if (_countShift(toKey, targetShift) >= maxDaily) {
+      _toast('Hedef vardiya dolu (max $maxDaily).');
+      return;
+    }
+
+    final fromList = _planByDay[fromKey]?[fromShift];
+    if (fromList == null || payload.fromIndex >= fromList.length) return;
+
+    setState(() {
+      fromList.removeAt(payload.fromIndex);
+      _listForShift(toKey, targetShift).add(payload.item);
+    });
+  }
+
+  // ── Dialogs ───────────────────────────────────────────────────────────────
   Future<VisitPlanItem?> _showAddOrEditDialog({
     required String title,
     VisitPlanItem? existing,
@@ -241,471 +240,1078 @@ class _CalendarPageState extends State<CalendarPage> {
 
     final res = await showDialog<VisitPlanItem>(
       context: context,
-      builder: (_) {
-        return AlertDialog(
-          title: Text(existing == null ? 'Plan Ekle' : 'Planı Düzenle'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
-              const SizedBox(height: 12),
-              const Text('Tekrar', style: TextStyle(fontWeight: FontWeight.w700)),
-              const SizedBox(height: 6),
-              DropdownButtonFormField<RepeatType>(
-                value: selected,
-                items: RepeatType.values
-                    .map((t) => DropdownMenuItem(value: t, child: Text(t.label)))
-                    .toList(),
-                onChanged: (v) => selected = v ?? RepeatType.none,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  isDense: true,
-                ),
-              ),
-              const SizedBox(height: 12),
-              const Text('Not', style: TextStyle(fontWeight: FontWeight.w700)),
-              const SizedBox(height: 6),
-              TextField(
-                controller: noteCtrl,
-                maxLines: 3,
-                decoration: const InputDecoration(
-                  hintText: 'Not yaz...',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, null),
-              child: const Text('İptal'),
-            ),
-            FilledButton(
-              onPressed: () {
-                final note = noteCtrl.text.trim();
-                Navigator.pop(
-                  context,
-                  VisitPlanItem(
-                    title: title,
-                    repeat: selected,
-                    note: note.isEmpty ? null : note,
-                    seriesId: existing?.seriesId ?? _newSeriesId(title),
-                  ),
-                );
-              },
-              child: const Text('Kaydet'),
-            ),
-          ],
-        );
-      },
+      builder: (_) => _PlanDialog(
+        title: title,
+        existing: existing,
+        initialRepeat: selected,
+        noteCtrl: noteCtrl,
+        newSeriesId: _newSeriesId,
+      ),
     );
-
     noteCtrl.dispose();
     return res;
   }
 
-  // -------------------------
-  // Actions: add / edit / move / reorder
-  // -------------------------
-  Future<void> _handleDropAddress(Address address, DateTime dayKey) async {
-    if (_countForDay(dayKey) >= maxDaily) {
-      _toast('Bu gün için limit dolu (max $maxDaily).');
+  Future<void> _handleDropAddress(Address address, DateTime dayKey, ShiftType shift) async {
+    if (_countShift(dayKey, shift) >= maxDaily) {
+      _toast('Bu vardiya için limit dolu (max $maxDaily).');
       return;
     }
-
     final item = await _showAddOrEditDialog(title: address.address);
     if (item == null) return;
-
-    setState(() {
-      _addWithRepeat(baseDay: dayKey, item: item);
-    });
+    setState(() => _addWithRepeat(baseDay: dayKey, item: item, shift: shift));
   }
 
-  Future<void> _editItem(DateTime dayKey, int index) async {
-    final list = _planByDay[dayKey];
+  Future<void> _editItem(DateTime dayKey, ShiftType shift, int index) async {
+    final list = _planByDay[dayKey]?[shift];
     if (list == null || index < 0 || index >= list.length) return;
-
-    final old = list[index];
+    final old     = list[index];
     final updated = await _showAddOrEditDialog(title: old.title, existing: old);
     if (updated == null) return;
-
     setState(() {
-      // repeat değişince eski seri kalmasın
       _removeSeriesEverywhere(old.seriesId);
-      _addWithRepeat(baseDay: dayKey, item: updated);
+      _addWithRepeat(baseDay: dayKey, item: updated, shift: shift);
     });
   }
 
-  void _moveItemToDay(_MovePayload payload, DateTime targetDay) {
-    final fromKey = _dateOnly(payload.fromDay);
-    final toKey = _dateOnly(targetDay);
-
-    if (_sameDay(fromKey, toKey)) return;
-
-    if (_countForDay(toKey) >= maxDaily) {
-      _toast('Hedef gün dolu (max $maxDaily).');
-      return;
-    }
-
-    final fromList = _planByDay[fromKey];
-    if (fromList == null || payload.fromIndex >= fromList.length) return;
-
-    setState(() {
-      fromList.removeAt(payload.fromIndex);
-      if (fromList.isEmpty) {
-        _planByDay.remove(fromKey);
-      } else {
-        _planByDay[fromKey] = fromList;
-      }
-
-      final toList = _listForDay(toKey);
-      toList.add(payload.item);
-      _planByDay[toKey] = toList;
-    });
-  }
-
-  void _reorderWithinDay(DateTime dayKey, int oldIndex, int newIndex) {
-    final list = _planByDay[dayKey];
-    if (list == null) return;
-
-    setState(() {
-      if (newIndex > oldIndex) newIndex -= 1;
-      final item = list.removeAt(oldIndex);
-      list.insert(newIndex, item);
-      _planByDay[dayKey] = list;
-    });
-  }
-
-  // -------------------------
-  // UI
-  // -------------------------
+  // ── BUILD ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     final days = List<DateTime>.generate(7, (i) => weekStart.add(Duration(days: i)));
-
-    // seçili adres store’dan silindiyse null
     if (selectedAddress != null && !addresses.any((a) => a.code == selectedAddress!.code)) {
       selectedAddress = null;
     }
 
+    // Hafta aralığı metni
+    final wEnd   = weekStart.add(const Duration(days: 6));
+    final weekLabel =
+        '${weekStart.day} ${_monthShort(weekStart.month)} — ${wEnd.day} ${_monthShort(wEnd.month)} ${wEnd.year}';
+
     return Scaffold(
-      backgroundColor: _bg,
-      body: SafeArea(
-        child: Column(
-          children: [
-            const SizedBox(height: 10),
+      backgroundColor: _C.bg,
+      body: Column(
+        children: [
+          // ── Top Bar ─────────────────────────────────────────────────────
+          _TopBar(
+            weekLabel: weekLabel,
+            addresses: addresses,
+            selectedAddress: selectedAddress,
+            selectedDay: selectedDay,
+            onBack: () => Navigator.of(context).maybePop(),
+            onPrevWeek: () => _changeWeek(-1),
+            onNextWeek: () => _changeWeek(1),
+            onAddressChanged: (v) => setState(() => selectedAddress = v),
+            onSendToRoute: widget.onSendToRoute == null ? null : () {
+              final addrs = _addressesForDay(selectedDay);
+              if (addrs.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Seçili günde planlanmış adres yok.'),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+                return;
+              }
+              widget.onSendToRoute!(addrs);
+              Navigator.of(context).maybePop();
+            },
+          ),
 
-            // ---- Top bar (aynı yapı, modern görünüm + Geri butonu)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: _glass(
-                strong: true,
-                pad: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                child: Row(
-                  children: [
-                    // ✅ Geri butonu (takvimden çıkabilmen için)
-                    IconButton(
-                      onPressed: () => Navigator.of(context).maybePop(),
-                      icon: Icon(
-                        Icons.arrow_back_ios_new,
-                        color: Colors.white.withOpacity(0.92),
-                        size: 20,
-                      ),
-                      tooltip: 'Geri',
-                    ),
-                    const SizedBox(width: 2),
-
-                    IconButton(
-                      onPressed: () => setState(() => weekStart = weekStart.subtract(const Duration(days: 7))),
-                      icon: Icon(Icons.chevron_left, color: Colors.white.withOpacity(0.92)),
-                    ),
-                    IconButton(
-                      onPressed: () => setState(() => weekStart = weekStart.add(const Duration(days: 7))),
-                      icon: Icon(Icons.chevron_right, color: Colors.white.withOpacity(0.92)),
-                    ),
-                    const SizedBox(width: 6),
-
-                    // dropdown container
-                    Container(
-                      height: 40,
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.06),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.white.withOpacity(0.10)),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<Address>(
-                          value: selectedAddress,
-                          dropdownColor: const Color(0xFF151826),
-                          hint: Text('Adresler', style: TextStyle(color: Colors.white.withOpacity(0.70))),
-                          iconEnabledColor: Colors.white.withOpacity(0.85),
-                          items: addresses
-                              .map(
-                                (a) => DropdownMenuItem<Address>(
-                                  value: a,
-                                  child: Text(
-                                    a.address,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(color: Colors.white),
-                                  ),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (v) => setState(() => selectedAddress = v),
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(width: 10),
-
-                    // draggable address (dropdown’dan seç, sürükle)
-                    if (selectedAddress != null)
-                      Draggable<Object>(
-                        data: selectedAddress!,
-                        feedback: Material(
-                          color: Colors.transparent,
-                          child: _glass(
-                            strong: true,
-                            pad: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                            child: ConstrainedBox(
-                              constraints: const BoxConstraints(maxWidth: 240),
-                              child: Text(
-                                selectedAddress!.address,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
-                              ),
-                            ),
-                          ),
-                        ),
-                        childWhenDragging: Opacity(
-                          opacity: 0.55,
-                          child: _pill('Sürükle', solid: false),
-                        ),
-                        child: _pill('Sürükle', solid: true),
-                      ),
-
-                    const Spacer(),
-                    Text('Takvim', style: _tTitle),
-                  ],
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
-            // ---- Week columns
-            Expanded(
+          // ── Haftalık kolonlar ────────────────────────────────────────────
+          Expanded(
+            child: FadeTransition(
+              opacity: _weekFade,
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 6),
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                 child: Row(
-                  children: days.map((day) {
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: days.asMap().entries.map((entry) {
+                    final i      = entry.key;
+                    final day    = entry.value;
                     final dayKey = _dateOnly(day);
-                    final list = _planByDay[dayKey] ?? <VisitPlanItem>[];
-                    final isSel = _sameDay(dayKey, selectedDay);
+                    final isSel  = _sameDay(dayKey, selectedDay);
+                    final isToday = _isToday(day);
 
-                    return Container(
-                      width: 176,
-                      margin: const EdgeInsets.symmetric(horizontal: 8),
-                      decoration: BoxDecoration(
-                        color: isSel ? Colors.white.withOpacity(0.06) : Colors.white.withOpacity(0.03),
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(color: Colors.white.withOpacity(isSel ? 0.16 : 0.10)),
-                      ),
-                      child: DragTarget<Object>(
-                        onWillAcceptWithDetails: (_) => true,
-                        onAcceptWithDetails: (details) {
-                          final data = details.data;
-
-                          if (data is Address) {
-                            _handleDropAddress(data, dayKey);
-                            return;
-                          }
-                          if (data is _MovePayload) {
-                            setState(() => _moveItemToDay(data, dayKey));
-                            return;
-                          }
-                        },
-                        builder: (context, candidate, rejected) {
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              // day header
-                              InkWell(
-                                onTap: () => setState(() => selectedDay = dayKey),
-                                child: Container(
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.02),
-                                    borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Text(
-                                        '${day.day}/${day.month}',
-                                        style: TextStyle(
-                                          color: Colors.white.withOpacity(0.95),
-                                          fontWeight: FontWeight.w900,
-                                          fontSize: 14,
-                                        ),
-                                      ),
-                                      const Spacer(),
-                                      _pill('${list.length}/$maxDaily', solid: false),
-                                    ],
-                                  ),
-                                ),
-                              ),
-
-                              // body
-                              Expanded(
-                                child: list.isEmpty
-                                    ? Center(
-                                        child: Opacity(
-                                          opacity: 0.8,
-                                          child: Column(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Icon(Icons.inbox_outlined, color: Colors.white.withOpacity(0.55)),
-                                              const SizedBox(height: 6),
-                                              Text('Boş', style: _tBody),
-                                            ],
-                                          ),
-                                        ),
-                                      )
-                                    : ReorderableListView.builder(
-                                        padding: const EdgeInsets.all(10),
-                                        itemCount: list.length,
-                                        buildDefaultDragHandles: false,
-                                        onReorder: (oldIndex, newIndex) =>
-                                            _reorderWithinDay(dayKey, oldIndex, newIndex),
-                                        itemBuilder: (context, index) {
-                                          final item = list[index];
-
-                                          return Container(
-                                            key: ValueKey(
-                                              '${dayKey.toIso8601String()}-$index-${item.seriesId}-${item.title}',
-                                            ),
-                                            margin: const EdgeInsets.only(bottom: 10),
-                                            padding: const EdgeInsets.all(12),
-                                            decoration: BoxDecoration(
-                                              color: Colors.white.withOpacity(0.06),
-                                              borderRadius: BorderRadius.circular(18),
-                                              border: Border.all(color: Colors.white.withOpacity(0.10)),
-                                              boxShadow: [
-                                                BoxShadow(
-                                                  color: Colors.black.withOpacity(0.22),
-                                                  blurRadius: 12,
-                                                  offset: const Offset(0, 8),
-                                                ),
-                                              ],
-                                            ),
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
-                                                Text(
-                                                  item.title,
-                                                  style: TextStyle(
-                                                    color: Colors.white.withOpacity(0.98),
-                                                    fontWeight: FontWeight.w900,
-                                                    fontSize: 13.5,
-                                                    letterSpacing: 0.15,
-                                                  ),
-                                                  maxLines: 2,
-                                                  overflow: TextOverflow.ellipsis,
-                                                ),
-                                                const SizedBox(height: 10),
-                                                Row(
-                                                  children: [
-                                                    // same-day reorder handle
-                                                    ReorderableDragStartListener(
-                                                      index: index,
-                                                      child: Icon(
-                                                        Icons.drag_handle,
-                                                        color: Colors.white.withOpacity(0.85),
-                                                        size: 20,
-                                                      ),
-                                                    ),
-                                                    const SizedBox(width: 8),
-                                                    _pill(item.repeat.short, solid: true),
-                                                    const SizedBox(width: 8),
-                                                    if (item.note != null && item.note!.trim().isNotEmpty)
-                                                      Expanded(
-                                                        child: Text(
-                                                          item.note!,
-                                                          overflow: TextOverflow.ellipsis,
-                                                          style: _tBody,
-                                                        ),
-                                                      ),
-                                                    IconButton(
-                                                      visualDensity: VisualDensity.compact,
-                                                      onPressed: () => _editItem(dayKey, index),
-                                                      icon: Icon(Icons.edit, color: Colors.white.withOpacity(0.90), size: 18),
-                                                    ),
-                                                  ],
-                                                ),
-                                                const SizedBox(height: 8),
-
-                                                // cross-day move
-                                                Draggable<Object>(
-                                                  data: _MovePayload(
-                                                    fromDay: dayKey,
-                                                    fromIndex: index,
-                                                    item: item,
-                                                  ),
-                                                  feedback: Material(
-                                                    color: Colors.transparent,
-                                                    child: _glass(
-                                                      strong: true,
-                                                      pad: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                                      child: ConstrainedBox(
-                                                        constraints: const BoxConstraints(maxWidth: 220),
-                                                        child: Text(
-                                                          item.title,
-                                                          overflow: TextOverflow.ellipsis,
-                                                          style: const TextStyle(
-                                                            color: Colors.white,
-                                                            fontWeight: FontWeight.w900,
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  child: Row(
-                                                    children: [
-                                                      Icon(Icons.swap_horiz, color: Colors.white.withOpacity(0.88), size: 18),
-                                                      const SizedBox(width: 6),
-                                                      Text(
-                                                        'Taşı',
-                                                        style: TextStyle(
-                                                          color: Colors.white.withOpacity(0.85),
-                                                          fontWeight: FontWeight.w800,
-                                                          fontSize: 12,
-                                                        ),
-                                                      ),
-                                                      const Spacer(),
-                                                      Icon(Icons.arrow_forward_ios, color: Colors.white.withOpacity(0.35), size: 14),
-                                                    ],
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          );
-                                        },
-                                      ),
-                              ),
-                            ],
-                          );
-                        },
-                      ),
+                    final morningList   = _planByDay[dayKey]?[ShiftType.morning]   ?? <VisitPlanItem>[];
+                    final afternoonList = _planByDay[dayKey]?[ShiftType.afternoon] ?? <VisitPlanItem>[];
+                    return _DayColumn(
+                      day: day,
+                      dayKey: dayKey,
+                      dayIndex: i,
+                      morningList: morningList,
+                      afternoonList: afternoonList,
+                      isSelected: isSel,
+                      isToday: isToday,
+                      maxDaily: maxDaily,
+                      onTapHeader: () => setState(() => selectedDay = dayKey),
+                      onAcceptDrop: (data, shift) {
+                        if (data is Address)      _handleDropAddress(data, dayKey, shift);
+                        if (data is _MovePayload) setState(() => _moveItemToDay(data, dayKey, shift));
+                      },
+                      onEditItem: (shift, idx) => _editItem(dayKey, shift, idx),
+                      onReorder: (shift, o, n) => _reorderWithinShift(dayKey, shift, o, n),
+                      buildMovePayload: (shift, idx) {
+                        final list = shift == ShiftType.morning ? morningList : afternoonList;
+                        return _MovePayload(fromDay: dayKey, fromIndex: idx, item: list[idx], shift: shift);
+                      },
                     );
                   }).toList(),
                 ),
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
 
-            const SizedBox(height: 10),
+  /// Seçili günün tüm vardiya adreslerini döndürür
+  List<String> _addressesForDay(DateTime day) {
+    final key = _dateOnly(day);
+    final dayMap = _planByDay[key];
+    if (dayMap == null) return [];
+    final result = <String>[];
+    for (final list in dayMap.values) {
+      result.addAll(list.map((e) => e.title));
+    }
+    return result;
+  }
+
+  String _monthShort(int m) =>
+      ['', 'Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'][m];
+
+  String _fullDate(DateTime d) {
+    const months = ['', 'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
+        'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
+    return '${d.day} ${months[d.month]} ${d.year}';
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TOP BAR
+// ─────────────────────────────────────────────────────────────────────────────
+class _TopBar extends StatelessWidget {
+  const _TopBar({
+    required this.weekLabel,
+    required this.addresses,
+    required this.selectedAddress,
+    required this.selectedDay,
+    required this.onBack,
+    required this.onPrevWeek,
+    required this.onNextWeek,
+    required this.onAddressChanged,
+    this.onSendToRoute,
+  });
+
+  final String weekLabel;
+  final List<Address> addresses;
+  final Address? selectedAddress;
+  final DateTime selectedDay;
+  final VoidCallback onBack, onPrevWeek, onNextWeek;
+  final ValueChanged<Address?> onAddressChanged;
+  final VoidCallback? onSendToRoute;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: _C.sidebar,
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      child: Row(
+        children: [
+          // Geri
+          _NavBtn(icon: Icons.arrow_back_ios_new_rounded, onTap: onBack),
+          const SizedBox(width: 4),
+
+          // Hafta navigasyonu
+          _NavBtn(icon: Icons.chevron_left_rounded, onTap: onPrevWeek),
+          _NavBtn(icon: Icons.chevron_right_rounded, onTap: onNextWeek),
+          const SizedBox(width: 12),
+
+          // Hafta etiketi
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Haftalık Takvim',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16)),
+              Text(weekLabel,
+                  style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 11.5, fontWeight: FontWeight.w600)),
+            ],
+          ),
+
+          const Spacer(),
+
+          // Rotaya Gönder butonu
+          if (onSendToRoute != null) ...[
+            FilledButton.icon(
+              onPressed: onSendToRoute,
+              icon: const Icon(Icons.alt_route_rounded, size: 16),
+              label: const Text('Rotaya Gönder'),
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF53D6FF),
+                foregroundColor: const Color(0xFF0D2137),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                textStyle: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
+              ),
+            ),
+            const SizedBox(width: 12),
+          ],
+
+          // Adres dropdown
+          SizedBox(
+            width: 260, height: 40,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.white.withOpacity(0.14)),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<Address>(
+                  value: selectedAddress,
+                  isExpanded: true,
+                  dropdownColor: const Color(0xFF1A2236),
+                  hint: const Row(children: [
+                    Icon(Icons.place_outlined, size: 15, color: Color(0xFF9DAFC8)),
+                    SizedBox(width: 6),
+                    Text('Adres Seç', style: TextStyle(color: Color(0xFF9DAFC8), fontSize: 13)),
+                  ]),
+                  icon: Icon(Icons.expand_more_rounded, color: Colors.white.withOpacity(0.6), size: 18),
+                  items: addresses.map((a) => DropdownMenuItem<Address>(
+                    value: a,
+                    child: Text(a.address, overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+                  )).toList(),
+                  onChanged: onAddressChanged,
+                ),
+              ),
+            ),
+          ),
+
+          // Sürüklenebilir adres kapsülü
+          if (selectedAddress != null) ...[
+            const SizedBox(width: 10),
+            Draggable<Object>(
+              data: selectedAddress!,
+              feedback: Material(
+                color: Colors.transparent,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: _C.accentNav,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 16, offset: const Offset(0, 6))],
+                  ),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 240),
+                    child: Text(selectedAddress!.address,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 13)),
+                  ),
+                ),
+              ),
+              childWhenDragging: Opacity(
+                opacity: 0.5,
+                child: _DragPill(label: selectedAddress!.address),
+              ),
+              child: _DragPill(label: selectedAddress!.address),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _NavBtn extends StatelessWidget {
+  const _NavBtn({required this.icon, required this.onTap});
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        width: 36, height: 36,
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Icon(icon, color: Colors.white.withOpacity(0.85), size: 18),
+      ),
+    );
+  }
+}
+
+class _DragPill extends StatelessWidget {
+  const _DragPill({required this.label});
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(colors: [Color(0xFF53D6FF), Color(0xFF3DBFDB)]),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.drag_indicator_rounded, size: 14, color: Colors.white),
+          const SizedBox(width: 6),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 160),
+            child: Text(label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 12.5)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GÜN KOLONU — Sabah / Öğleden Sonra bölümlü
+// ─────────────────────────────────────────────────────────────────────────────
+class _DayColumn extends StatelessWidget {
+  const _DayColumn({
+    required this.day,
+    required this.dayKey,
+    required this.dayIndex,
+    required this.morningList,
+    required this.afternoonList,
+    required this.isSelected,
+    required this.isToday,
+    required this.maxDaily,
+    required this.onTapHeader,
+    required this.onAcceptDrop,
+    required this.onEditItem,
+    required this.onReorder,
+    required this.buildMovePayload,
+  });
+
+  final DateTime day, dayKey;
+  final int dayIndex;
+  final List<VisitPlanItem> morningList, afternoonList;
+  final bool isSelected, isToday;
+  final int maxDaily;
+  final VoidCallback onTapHeader;
+  final void Function(Object, ShiftType) onAcceptDrop;
+  final void Function(ShiftType, int) onEditItem;
+  final void Function(ShiftType, int, int) onReorder;
+  final _MovePayload Function(ShiftType, int) buildMovePayload;
+
+  Color get _accent => _dayColors[dayIndex];
+  int get _total => morningList.length + afternoonList.length;
+
+  static const _months = ['', 'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs',
+      'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
+  String _turkishDate(DateTime d) => '${d.day} ${_months[d.month]} ${d.year}';
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 210,
+      margin: const EdgeInsets.only(right: 10),
+      decoration: BoxDecoration(
+        color: _C.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isSelected ? _accent.withOpacity(0.45) : _C.stroke,
+          width: isSelected ? 1.5 : 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: isSelected ? _accent.withOpacity(0.08) : Colors.black.withOpacity(0.03),
+            blurRadius: 16, offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          // ── Kolon başlığı ────────────────────────────────────────────
+          GestureDetector(
+            onTap: onTapHeader,
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+              decoration: BoxDecoration(
+                color: isToday ? _C.accentNav : _accent.withOpacity(0.04),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Container(width: 4, height: 28,
+                          decoration: BoxDecoration(color: _accent, borderRadius: BorderRadius.circular(2))),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(_dayNames[dayIndex],
+                                style: TextStyle(
+                                  color: isToday ? Colors.white : _C.textDark,
+                                  fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 0.5,
+                                )),
+                            Text(_turkishDate(day),
+                                style: TextStyle(
+                                  color: isToday ? Colors.white.withOpacity(0.8) : _C.textMid,
+                                  fontWeight: FontWeight.w700, fontSize: 12,
+                                )),
+                          ],
+                        ),
+                      ),
+                      _FillBadge(count: _total, max: maxDaily * 2, color: _accent, dark: isToday),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: _total / (maxDaily * 2),
+                      minHeight: 4,
+                      backgroundColor: isToday ? Colors.white.withOpacity(0.15) : _accent.withOpacity(0.12),
+                      valueColor: AlwaysStoppedAnimation(
+                        _total / (maxDaily * 2) > 0.8 ? _C.red : _accent,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // ── İki vardiya bölümü ────────────────────────────────────────
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  _ShiftSection(
+                    shift: ShiftType.morning,
+                    list: morningList,
+                    dayKey: dayKey,
+                    accent: _accent,
+                    maxDaily: maxDaily,
+                    onAcceptDrop: (data) => onAcceptDrop(data, ShiftType.morning),
+                    onEditItem: (idx) => onEditItem(ShiftType.morning, idx),
+                    onReorder: (o, n) => onReorder(ShiftType.morning, o, n),
+                    buildMovePayload: (idx) => buildMovePayload(ShiftType.morning, idx),
+                  ),
+                  // Ayırıcı çizgi
+                  Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 12),
+                    height: 1,
+                    color: _C.stroke,
+                  ),
+                  _ShiftSection(
+                    shift: ShiftType.afternoon,
+                    list: afternoonList,
+                    dayKey: dayKey,
+                    accent: _accent,
+                    maxDaily: maxDaily,
+                    onAcceptDrop: (data) => onAcceptDrop(data, ShiftType.afternoon),
+                    onEditItem: (idx) => onEditItem(ShiftType.afternoon, idx),
+                    onReorder: (o, n) => onReorder(ShiftType.afternoon, o, n),
+                    buildMovePayload: (idx) => buildMovePayload(ShiftType.afternoon, idx),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VARDİYA BÖLÜMÜ — Sabah veya Öğleden Sonra
+// ─────────────────────────────────────────────────────────────────────────────
+class _ShiftSection extends StatelessWidget {
+  const _ShiftSection({
+    required this.shift,
+    required this.list,
+    required this.dayKey,
+    required this.accent,
+    required this.maxDaily,
+    required this.onAcceptDrop,
+    required this.onEditItem,
+    required this.onReorder,
+    required this.buildMovePayload,
+  });
+
+  final ShiftType shift;
+  final List<VisitPlanItem> list;
+  final DateTime dayKey;
+  final Color accent;
+  final int maxDaily;
+  final ValueChanged<Object> onAcceptDrop;
+  final ValueChanged<int> onEditItem;
+  final Function(int, int) onReorder;
+  final _MovePayload Function(int) buildMovePayload;
+
+  @override
+  Widget build(BuildContext context) {
+    final isMorning = shift == ShiftType.morning;
+    // Her iki vardiya — aynı nötr ton, sadece ince sol çizgi ayrımı
+    const shiftColor = Color(0xFF5A6A85);
+    const shiftBg    = Color(0xFFF7FAFF);
+    final borderAccent = isMorning ? const Color(0xFF9DAFC8) : const Color(0xFF53D6FF);
+
+    return DragTarget<Object>(
+      onWillAcceptWithDetails: (_) => true,
+      onAcceptWithDetails: (d) => onAcceptDrop(d.data),
+      builder: (context, candidate, _) {
+        final isDragOver = candidate.isNotEmpty;
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          decoration: BoxDecoration(
+            color: isDragOver ? _C.accent.withOpacity(0.04) : Colors.transparent,
+            border: isDragOver ? Border.all(color: _C.accent.withOpacity(0.4), width: 1.5) : null,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Vardiya başlığı — sol ince çizgi ile ayrım
+              Container(
+                color: shiftBg,
+                child: Row(
+                  children: [
+                    // Sol ince çizgi
+                    Container(width: 3, height: 36, color: borderAccent),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 9),
+                        child: Row(
+                          children: [
+                            Text(shift.label.toUpperCase(),
+                                style: const TextStyle(
+                                  color: Color(0xFF5A6A85),
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 10,
+                                  letterSpacing: 1.0,
+                                )),
+                            const Spacer(),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: list.length >= maxDaily
+                                    ? _C.red.withOpacity(0.08)
+                                    : _C.stroke,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text('${list.length}/$maxDaily',
+                                  style: TextStyle(
+                                    color: list.length >= maxDaily ? _C.red : _C.textLight,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w800,
+                                  )),
+                            ),
+                            const SizedBox(width: 10),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Görev listesi
+              if (list.isEmpty)
+                _EmptyShiftState(isDragOver: isDragOver, color: shiftColor)
+              else
+                ReorderableListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  padding: const EdgeInsets.all(8),
+                  itemCount: list.length,
+                  buildDefaultDragHandles: false,
+                  onReorder: onReorder,
+                  itemBuilder: (_, idx) {
+                    final item = list[idx];
+                    return _TaskCard(
+                      key: ValueKey('${dayKey.toIso8601String()}-${shift.name}-$idx-${item.seriesId}'),
+                      item: item,
+                      index: idx,
+                      accent: accent,
+                      onEdit: () => onEditItem(idx),
+                      movePayload: buildMovePayload(idx),
+                    );
+                  },
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _EmptyShiftState extends StatelessWidget {
+  const _EmptyShiftState({required this.isDragOver, required this.color});
+  final bool isDragOver;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 60,
+      child: Center(
+        child: isDragOver
+            ? Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.add_rounded, size: 14, color: _C.accent),
+                  const SizedBox(width: 4),
+                  const Text('Bırak',
+                      style: TextStyle(color: _C.accent, fontSize: 12, fontWeight: FontWeight.w700)),
+                ],
+              )
+            : const Text('—',
+                style: TextStyle(color: _C.strokeMid, fontSize: 18, fontWeight: FontWeight.w300)),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DOLULUK ROZETİ
+// ─────────────────────────────────────────────────────────────────────────────
+class _FillBadge extends StatelessWidget {
+  const _FillBadge({required this.count, required this.max, required this.color, required this.dark});
+  final int count, max;
+  final Color color;
+  final bool dark;
+
+  @override
+  Widget build(BuildContext context) {
+    final full = count >= max;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: full
+            ? _C.red.withOpacity(0.12)
+            : dark
+                ? Colors.white.withOpacity(0.12)
+                : color.withOpacity(0.10),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: full
+              ? _C.red.withOpacity(0.4)
+              : dark
+                  ? Colors.white.withOpacity(0.2)
+                  : color.withOpacity(0.3),
+        ),
+      ),
+      child: Text(
+        '$count/$max',
+        style: TextStyle(
+          color: full ? _C.red : dark ? Colors.white : color,
+          fontWeight: FontWeight.w900,
+          fontSize: 11,
+        ),
+      ),
+    );
+  }
+}
+
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GÖREV KARTI
+// ─────────────────────────────────────────────────────────────────────────────
+class _TaskCard extends StatelessWidget {
+  const _TaskCard({
+    super.key,
+    required this.item,
+    required this.index,
+    required this.accent,
+    required this.onEdit,
+    required this.movePayload,
+  });
+
+  final VisitPlanItem item;
+  final int index;
+  final Color accent;
+  final VoidCallback onEdit;
+  final _MovePayload movePayload;
+
+  Color _repeatColor() {
+    switch (item.repeat) {
+      case RepeatType.daily:   return _C.accentNav;
+      case RepeatType.weekly:  return _C.accentNav;
+      case RepeatType.monthly: return _C.accentNav;
+      case RepeatType.none:    return _C.textLight;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: _C.cardBg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _C.stroke),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Renkli üst çizgi
+          Container(
+            height: 3,
+            decoration: BoxDecoration(
+              color: accent,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Başlık + düzenle
+                Row(
+                  children: [
+                    // Sıra numarası
+                    Container(
+                      width: 20, height: 20,
+                      decoration: BoxDecoration(
+                        color: accent.withOpacity(0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: Text('${index + 1}',
+                            style: TextStyle(color: accent, fontSize: 10, fontWeight: FontWeight.w900)),
+                      ),
+                    ),
+                    const SizedBox(width: 7),
+                    Expanded(
+                      child: Text(item.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: _C.textDark,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 12.5,
+                            height: 1.3,
+                          )),
+                    ),
+                    GestureDetector(
+                      onTap: onEdit,
+                      child: Container(
+                        width: 26, height: 26,
+                        decoration: BoxDecoration(
+                          color: accent.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(Icons.edit_rounded, size: 13, color: accent),
+                      ),
+                    ),
+                  ],
+                ),
+
+                if (item.note != null && item.note!.trim().isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(item.note!,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: _C.textMid, fontSize: 11.5, height: 1.4)),
+                ],
+
+                const SizedBox(height: 8),
+
+                // Alt satır — tekrar rozeti + taşı + sırala
+                Row(
+                  children: [
+                    // Tekrar rozeti
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: _repeatColor().withOpacity(0.10),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: _repeatColor().withOpacity(0.3)),
+                      ),
+                      child: Text(item.repeat.short,
+                          style: TextStyle(
+                            color: _repeatColor(),
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                          )),
+                    ),
+                    const Spacer(),
+
+                    // Sıralama tutamacı
+                    ReorderableDragStartListener(
+                      index: index,
+                      child: Container(
+                        width: 26, height: 26,
+                        decoration: BoxDecoration(
+                          color: _C.stroke,
+                          borderRadius: BorderRadius.circular(7),
+                        ),
+                        child: const Icon(Icons.drag_handle_rounded, size: 14, color: _C.textLight),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+
+                    // Gün arası sürükle
+                    Draggable<Object>(
+                      data: movePayload,
+                      feedback: Material(
+                        color: Colors.transparent,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: _C.accentNav,
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 16, offset: const Offset(0, 6))],
+                          ),
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 200),
+                            child: Text(item.title,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 13)),
+                          ),
+                        ),
+                      ),
+                      childWhenDragging: Opacity(
+                        opacity: 0.4,
+                        child: Container(
+                          width: 26, height: 26,
+                          decoration: BoxDecoration(color: accent.withOpacity(0.10), borderRadius: BorderRadius.circular(7)),
+                          child: Icon(Icons.swap_horiz_rounded, size: 14, color: accent),
+                        ),
+                      ),
+                      child: Container(
+                        width: 26, height: 26,
+                        decoration: BoxDecoration(color: accent.withOpacity(0.10), borderRadius: BorderRadius.circular(7)),
+                        child: Icon(Icons.swap_horiz_rounded, size: 14, color: accent),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PLAN DİYALOĞU — modern tasarım
+// ─────────────────────────────────────────────────────────────────────────────
+class _PlanDialog extends StatefulWidget {
+  const _PlanDialog({
+    required this.title,
+    required this.existing,
+    required this.initialRepeat,
+    required this.noteCtrl,
+    required this.newSeriesId,
+  });
+  final String title;
+  final VisitPlanItem? existing;
+  final RepeatType initialRepeat;
+  final TextEditingController noteCtrl;
+  final String Function(String) newSeriesId;
+
+  @override
+  State<_PlanDialog> createState() => _PlanDialogState();
+}
+
+class _PlanDialogState extends State<_PlanDialog> {
+  late RepeatType _selected;
+
+  @override
+  void initState() {
+    super.initState();
+    _selected = widget.initialRepeat;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      child: Container(
+        width: 380,
+        decoration: BoxDecoration(
+          color: _C.surface,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 40, offset: const Offset(0, 16))],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Başlık
+            Container(
+              padding: const EdgeInsets.fromLTRB(22, 18, 22, 18),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFF1A3A5C), Color(0xFF0D2137)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 38, height: 38,
+                    decoration: BoxDecoration(
+                      color: _C.accent.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.event_note_rounded, color: _C.accent, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.existing == null ? 'Plan Ekle' : 'Planı Düzenle',
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 15),
+                        ),
+                        Text(widget.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(color: Colors.white.withOpacity(0.55), fontSize: 11.5)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Tekrar seçimi
+                  const Text('Tekrar',
+                      style: TextStyle(color: _C.textDark, fontWeight: FontWeight.w800, fontSize: 13)),
+                  const SizedBox(height: 8),
+                  // Chip'lerle tekrar seçimi
+                  Wrap(
+                    spacing: 8,
+                    children: RepeatType.values.map((t) {
+                      final sel = t == _selected;
+                      return GestureDetector(
+                        onTap: () => setState(() => _selected = t),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 160),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: sel ? _C.accentNav : _C.cardBg,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: sel ? _C.accentNav : _C.stroke,
+                              width: sel ? 0 : 1,
+                            ),
+                          ),
+                          child: Text(t.label,
+                              style: TextStyle(
+                                color: sel ? Colors.white : _C.textMid,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 12.5,
+                              )),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Not alanı
+                  const Text('Not',
+                      style: TextStyle(color: _C.textDark, fontWeight: FontWeight.w800, fontSize: 13)),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: widget.noteCtrl,
+                    maxLines: 3,
+                    style: const TextStyle(color: _C.textDark, fontSize: 13),
+                    decoration: InputDecoration(
+                      hintText: 'Not yaz...',
+                      hintStyle: const TextStyle(color: _C.textLight),
+                      filled: true,
+                      fillColor: _C.cardBg,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: const BorderSide(color: _C.stroke),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: const BorderSide(color: _C.stroke),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: const BorderSide(color: _C.accent, width: 1.5),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Butonlar
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context, null),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: _C.textMid,
+                        side: const BorderSide(color: _C.stroke),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      child: const Text('İptal', style: TextStyle(fontWeight: FontWeight.w800)),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    flex: 2,
+                    child: FilledButton(
+                      onPressed: () {
+                        final note = widget.noteCtrl.text.trim();
+                        Navigator.pop(
+                          context,
+                          VisitPlanItem(
+                            title: widget.title,
+                            repeat: _selected,
+                            note: note.isEmpty ? null : note,
+                            seriesId: widget.existing?.seriesId ?? widget.newSeriesId(widget.title),
+                          ),
+                        );
+                      },
+                      style: FilledButton.styleFrom(
+                        backgroundColor: _C.accentNav,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      child: const Text('Kaydet',
+                          style: TextStyle(fontWeight: FontWeight.w900, color: Colors.white)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
