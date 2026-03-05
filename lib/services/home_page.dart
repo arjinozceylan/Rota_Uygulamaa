@@ -263,6 +263,37 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // ── Adres geocoding (CSV import için) ─────────────────────────────────────
+  Future<Address> _makeAndGeocodeManualAddress(String text) async {
+    final t = text.trim();
+    final code = 'M${(_manualCodeCounter++).toString().padLeft(3, '0')}';
+    try {
+      // OSM Places Service'den adres ara
+      final results = await _placesService.search(query: t);
+      if (results.isNotEmpty) {
+        final first = results.first;
+        return Address(
+          code: code,
+          address: t,
+          placeId: first.placeId,
+          lat: first.lat,
+          lng: first.lng,
+        );
+      }
+    } catch (e) {
+      // Hata durumunda fallback — continue
+    }
+
+    // Geocode başarısız olursa, manuel adres olarak ekle
+    return Address(
+      code: code,
+      address: t,
+      placeId: 'manual:$t',
+      lat: null,
+      lng: null,
+    );
+  }
+
   void _addAddressToPoolAndCards(Address addressObj) {
     final a = addressObj.address.trim();
     if (a.isEmpty) return;
@@ -354,20 +385,79 @@ class _HomePageState extends State<HomePage> {
       final commaCount = ','.allMatches(header).length;
       final semiCount = ';'.allMatches(header).length;
       final sep = semiCount > commaCount ? ';' : ',';
-      int added = 0;
+
+      // Adresleri ayrı listede topla (header'ı filtrele)
+      final addressesToProcess = <String>[];
       for (final line in lines) {
         final raw = line.trim();
         if (raw.isEmpty) continue;
         final firstCol = raw.split(sep).first.trim();
         if (firstCol.isEmpty) continue;
         if (firstCol.toLowerCase() == 'adres') continue;
-        _addAddressToPoolAndCards(_makeManualAddress(firstCol));
-        added++;
+        addressesToProcess.add(firstCol);
       }
+
+      if (addressesToProcess.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('CSV\'de işlenecek adres bulunamadı')),
+        );
+        return;
+      }
+
+      // Progress dialog göster
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => AlertDialog(
+          content: SizedBox(
+            height: 80,
+            child: Column(
+              children: [
+                const CircularProgressIndicator(),
+                const SizedBox(height: 16),
+                Expanded(
+                  child: Text(
+                    'Adresler haritanın üzerinde konumlandırılıyor...\n(${addressesToProcess.length} adres)',
+                    style: const TextStyle(fontSize: 13),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      // Her adres için geocoding yap
+      int added = 0;
+      for (final addressText in addressesToProcess) {
+        try {
+          final geocodedAddress = await _makeAndGeocodeManualAddress(
+            addressText,
+          );
+          if (mounted) {
+            _addAddressToPoolAndCards(geocodedAddress);
+            added++;
+          }
+        } catch (e) {
+          // Devam et, bu spesifik adres başarısız olsa da diğerlerine geç
+        }
+        // Yapı'yı responsive tutmak için küçük bir delay
+        await Future.delayed(const Duration(milliseconds: 100));
+      }
+
+      if (!mounted) return;
+      Navigator.pop(context); // Progress dialog'u kapat
+
+      final message = added == addressesToProcess.length
+          ? '✅ $added adres CSV\'den başarıyla harita üzerine konumlandırıldı!'
+          : '⚠️ $added / ${addressesToProcess.length} adres konumlandırıldı (Bazı adresler geocode edilemedi)';
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('✅ $added adres CSV\'den yüklendi')),
+        SnackBar(content: Text(message), duration: const Duration(seconds: 4)),
       );
     } catch (e) {
+      if (mounted) Navigator.pop(context); // Dialog'u kapat
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('CSV yükleme hatası: $e')));
