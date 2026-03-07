@@ -13,6 +13,7 @@ import '../screens/osm_places_service.dart';
 import '../screens/calendar_page.dart';
 import 'osrm_route_service.dart';
 import 'reports_page.dart';
+import 'tsp_optimizer_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TOKENS
@@ -155,6 +156,7 @@ class _HomePageState extends State<HomePage> {
   final TextEditingController _manualCtrl = TextEditingController();
   final OsmPlacesService _placesService = const OsmPlacesService();
   final OsrmRouteService _osrm = const OsrmRouteService();
+  final TspOptimizerService _tsp = const TspOptimizerService();
   Timer? _searchDebounce;
   int _latestSearchId = 0;
   bool _isSearching = false;
@@ -168,7 +170,32 @@ class _HomePageState extends State<HomePage> {
   final Map<String, RepeatType> repeatByAddress = {};
 
   // Başlangıç adresi
-  String? selectedStartAddress;
+  Address? fixedHomeAddress;
+  bool get hasFixedHome =>
+      fixedHomeAddress != null &&
+      fixedHomeAddress!.lat != null &&
+      fixedHomeAddress!.lng != null;
+  // Geçici uyumluluk katmanı:
+  // Eski kodun birçok yeri hâlâ `selectedStartAddress` (String?) kullanıyor.
+  // Yeni mimaride sabit başlangıç `fixedHomeAddress` olacak, ama önce derlemeyi
+  // toparlamak için bu adapter'ı kullanıyoruz.
+  String? get selectedStartAddress => fixedHomeAddress?.address;
+
+  set selectedStartAddress(String? value) {
+    if (value == null) {
+      fixedHomeAddress = null;
+      return;
+    }
+
+    Address? found;
+    for (final a in AddressStore.items) {
+      if (a.address == value) {
+        found = a;
+        break;
+      }
+    }
+    fixedHomeAddress = found;
+  }
 
   // Sayaçlar
   int _mapPickCodeCounter = 1;
@@ -316,6 +343,29 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  Future<void> _pickFixedHomeAddress() async {
+    final res = await Navigator.push<MapPickResult>(
+      context,
+      MaterialPageRoute(builder: (_) => const MapPickerPage()),
+    );
+    if (!mounted || res == null) return;
+
+    final home = _makeMapPickedAddress(res);
+
+    setState(() {
+      fixedHomeAddress = home;
+    });
+
+    // Ev adresi havuzda da görünsün; tekrar eklenmesini engelleyen mantık zaten var.
+    _addAddressToPoolAndCards(home);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Sabit ev/başlangıç konumu ayarlandı: ${home.address}'),
+      ),
+    );
+  }
+
   void _addManualAddress() {
     final text = _manualCtrl.text.trim();
     if (text.isEmpty) return;
@@ -334,10 +384,6 @@ class _HomePageState extends State<HomePage> {
     if (!dropped.contains(value)) {
       setState(() {
         dropped.add(value);
-        if (selectedStartAddress != null &&
-            !dropped.contains(selectedStartAddress)) {
-          selectedStartAddress = null;
-        }
       });
     }
   }
@@ -345,7 +391,6 @@ class _HomePageState extends State<HomePage> {
   void _removeFromQueue(String value) {
     setState(() {
       dropped.remove(value);
-      if (selectedStartAddress == value) selectedStartAddress = null;
     });
   }
 
@@ -353,7 +398,6 @@ class _HomePageState extends State<HomePage> {
     setState(() {
       dropped.clear();
       repeatByAddress.clear();
-      selectedStartAddress = null;
     });
   }
 
@@ -498,23 +542,21 @@ class _HomePageState extends State<HomePage> {
       return;
     }
 
-    Address start;
-    if (selectedStartAddress != null) {
-      final s = byText[selectedStartAddress!];
-      if (s == null || s.lat == null || s.lng == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Seçili başlangıç adresi geçersiz.')),
-        );
-        return;
-      }
-      start = s;
-    } else {
-      start = stops.first;
+    if (!hasFixedHome) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Önce sabit ev/başlangıç konumu seçilmelidir.'),
+        ),
+      );
+      return;
     }
 
-    final nodes = <Address>[start];
+    final home = fixedHomeAddress!;
+
+    // Node 0 = sabit ev / başlangıç / bitiş
+    final nodes = <Address>[home];
     for (final s in stops) {
-      if (s.address == start.address) continue;
+      if (s.address == home.address) continue;
       nodes.add(s);
     }
 
@@ -544,13 +586,23 @@ class _HomePageState extends State<HomePage> {
             .toList(growable: false),
       );
 
-      final idxRoute = _nearestNeighborTourIdx(matrix, 0);
-      final improved = _twoOptIdx(matrix, idxRoute);
+      // OSRM duration matrix -> plain square cost matrix
+      final cost = List<List<double>>.generate(
+        matrix.n,
+        (i) => List<double>.generate(matrix.n, (j) {
+          final v = matrix.durationsSeconds[i][j];
+          if (v == null) return 1e15;
+          return v;
+        }),
+      );
 
-      final totalMin = _tourCostIdxMin(matrix, improved).round();
-      final totalKm = _tourCostIdxKm(matrix, improved);
-      final path = improved.map((i) => nodes[i].address).toList();
+      // Exact optimum route with fixed start/end at node 0
+      final tspResult = _tsp.solveExact(cost);
+      final routeIdx = tspResult.route;
 
+      final totalMin = (tspResult.totalCost / 60.0).round();
+      final totalKm = _tourCostIdxKm(matrix, routeIdx);
+      final path = routeIdx.map((i) => nodes[i].address).toList();
       if (!mounted) return;
       Navigator.pop(context);
 
@@ -576,7 +628,9 @@ class _HomePageState extends State<HomePage> {
           totalMin: totalMin,
           totalKm: totalKm,
           path: path,
-          hasAutoStart: selectedStartAddress == null,
+          hasAutoStart: false,
+          title: 'Rota (Exact TSP + OSRM)',
+          noteOverride: 'Sabit başlangıç/bitiş noktası: ${home.address}',
         ),
       );
     } catch (e) {
@@ -593,11 +647,6 @@ class _HomePageState extends State<HomePage> {
   // ─────────────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    if (selectedStartAddress != null &&
-        !dropped.contains(selectedStartAddress)) {
-      selectedStartAddress = null;
-    }
-
     return Scaffold(
       backgroundColor: _T.bg,
       body: Row(
@@ -720,6 +769,8 @@ class _HomePageState extends State<HomePage> {
                             dropped: dropped,
                             addressCards: addressCards,
                             selectedStartAddress: selectedStartAddress,
+                            fixedHomeAddress: fixedHomeAddress,
+                            onPickFixedHome: _pickFixedHomeAddress,
                             onStartSelected: (v) =>
                                 setState(() => selectedStartAddress = v),
                             onRemove: _removeFromQueue,
@@ -1634,6 +1685,8 @@ class _QueuePanel extends StatelessWidget {
     required this.dropped,
     required this.addressCards,
     required this.selectedStartAddress,
+    required this.fixedHomeAddress,
+    required this.onPickFixedHome,
     required this.onStartSelected,
     required this.onRemove,
     required this.onAcceptDrop,
@@ -1641,6 +1694,8 @@ class _QueuePanel extends StatelessWidget {
 
   final List<String> dropped, addressCards;
   final String? selectedStartAddress;
+  final Address? fixedHomeAddress;
+  final VoidCallback onPickFixedHome;
   final ValueChanged<String?> onStartSelected;
   final ValueChanged<String> onRemove, onAcceptDrop;
 
@@ -1695,6 +1750,81 @@ class _QueuePanel extends StatelessWidget {
             ),
           ),
           const Divider(color: _T.stroke, height: 1),
+
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF7FAFF),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: _T.stroke),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: const [
+                      Icon(Icons.home_rounded, size: 16, color: _T.accent),
+                      SizedBox(width: 8),
+                      Text(
+                        'Sabit Başlangıç / Ev',
+                        style: TextStyle(
+                          color: _T.textDark,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 12.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    fixedHomeAddress?.address ?? 'Henüz seçilmedi',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: fixedHomeAddress != null
+                          ? _T.textDark
+                          : _T.textLight,
+                      fontSize: 12,
+                      fontWeight: fixedHomeAddress != null
+                          ? FontWeight.w700
+                          : FontWeight.w600,
+                      height: 1.3,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: onPickFixedHome,
+                      icon: const Icon(
+                        Icons.edit_location_alt_rounded,
+                        size: 16,
+                      ),
+                      label: Text(
+                        fixedHomeAddress == null
+                            ? 'Ev Konumu Seç'
+                            : 'Ev Konumunu Değiştir',
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: _T.accent,
+                        side: BorderSide(color: _T.accent.withOpacity(0.35)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        textStyle: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 12.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
 
           Expanded(
             child: DragTarget<String>(
@@ -2775,11 +2905,16 @@ class _RouteResultDialog extends StatelessWidget {
     required this.totalKm,
     required this.path,
     required this.hasAutoStart,
+    this.title = 'Rota (Gerçek Süre/Mesafe - OSRM)',
+    this.noteOverride,
   });
+
   final int totalMin;
   final double totalKm;
   final List<String> path;
   final bool hasAutoStart;
+  final String title;
+  final String? noteOverride;
 
   String _formatDuration(int min) {
     if (min < 60) return '$min dk';
@@ -2837,19 +2972,19 @@ class _RouteResultDialog extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 14),
-                  const Expanded(
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Transfer Rotası Hazır',
-                          style: TextStyle(
+                          title,
+                          style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.w900,
                             fontSize: 16,
                           ),
                         ),
-                        Text(
+                        const Text(
                           'OSRM — Gerçek Süre / Mesafe',
                           style: TextStyle(
                             color: Color(0xFF9DAFC8),
@@ -2956,7 +3091,7 @@ class _RouteResultDialog extends StatelessWidget {
                   ),
                   const SizedBox(width: 4),
                   const Text(
-                    'NN + 2-opt optimize',
+                    'Exact TSP optimize',
                     style: TextStyle(color: _T.textLight, fontSize: 11),
                   ),
                 ],
@@ -3102,7 +3237,7 @@ class _RouteResultDialog extends StatelessWidget {
               ),
             ),
 
-            if (hasAutoStart)
+            if (hasAutoStart || noteOverride != null)
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
                 child: Container(
@@ -3115,18 +3250,19 @@ class _RouteResultDialog extends StatelessWidget {
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: Colors.orange.withOpacity(0.3)),
                   ),
-                  child: const Row(
+                  child: Row(
                     children: [
-                      Icon(
+                      const Icon(
                         Icons.warning_amber_rounded,
                         size: 14,
                         color: Colors.orange,
                       ),
-                      SizedBox(width: 6),
+                      const SizedBox(width: 6),
                       Expanded(
                         child: Text(
-                          'Cihaz konumu alınamadı — ilk nokta başlangıç olarak alındı.',
-                          style: TextStyle(
+                          noteOverride ??
+                              'Cihaz konumu alınamadı — ilk nokta başlangıç olarak alındı.',
+                          style: const TextStyle(
                             color: Colors.orange,
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
@@ -3137,7 +3273,6 @@ class _RouteResultDialog extends StatelessWidget {
                   ),
                 ),
               ),
-
             // ── Kapat butonu ───────────────────────────────────────────────
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
