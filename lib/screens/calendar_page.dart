@@ -664,6 +664,7 @@ class _CalendarPageState extends State<CalendarPage>
                       isSelected: isSel,
                       isToday: isToday,
                       maxDaily: maxDaily,
+                      fixedHomeAddress: widget.fixedHomeAddress,
                       onTapHeader: () => setState(() => selectedDay = dayKey),
                       onAcceptDrop: (data, shift) {
                         if (data is Address)
@@ -1232,6 +1233,7 @@ class _DayColumn extends StatelessWidget {
     required this.isSelected,
     required this.isToday,
     required this.maxDaily,
+    required this.fixedHomeAddress,
     required this.onTapHeader,
     required this.onAcceptDrop,
     required this.onEditItem,
@@ -1244,6 +1246,7 @@ class _DayColumn extends StatelessWidget {
   final List<VisitPlanItem> morningList, afternoonList;
   final bool isSelected, isToday;
   final int maxDaily;
+  final Address? fixedHomeAddress;
   final VoidCallback onTapHeader;
   final void Function(Object, ShiftType) onAcceptDrop;
   final void Function(ShiftType, int) onEditItem;
@@ -1383,6 +1386,7 @@ class _DayColumn extends StatelessWidget {
                     dayKey: dayKey,
                     accent: _accent,
                     maxDaily: maxDaily,
+                    fixedHomeAddress: fixedHomeAddress,
                     onAcceptDrop: (data) =>
                         onAcceptDrop(data, ShiftType.morning),
                     onEditItem: (idx) => onEditItem(ShiftType.morning, idx),
@@ -1405,6 +1409,7 @@ class _DayColumn extends StatelessWidget {
                     dayKey: dayKey,
                     accent: _accent,
                     maxDaily: maxDaily,
+                    fixedHomeAddress: fixedHomeAddress,
                     onAcceptDrop: (data) =>
                         onAcceptDrop(data, ShiftType.afternoon),
                     onEditItem: (idx) => onEditItem(ShiftType.afternoon, idx),
@@ -1432,6 +1437,7 @@ class _ShiftSection extends StatelessWidget {
     required this.dayKey,
     required this.accent,
     required this.maxDaily,
+    required this.fixedHomeAddress,
     required this.onAcceptDrop,
     required this.onEditItem,
     required this.onReorder,
@@ -1443,6 +1449,7 @@ class _ShiftSection extends StatelessWidget {
   final DateTime dayKey;
   final Color accent;
   final int maxDaily;
+  final Address? fixedHomeAddress;
   final ValueChanged<Object> onAcceptDrop;
   final ValueChanged<int> onEditItem;
   final Function(int, int) onReorder;
@@ -1531,30 +1538,55 @@ class _ShiftSection extends StatelessWidget {
               ),
 
               // Görev listesi
-              if (list.isEmpty)
-                _EmptyShiftState(isDragOver: isDragOver, color: shiftColor)
-              else
-                ReorderableListView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  padding: const EdgeInsets.all(8),
-                  itemCount: list.length,
-                  buildDefaultDragHandles: false,
-                  onReorder: onReorder,
-                  itemBuilder: (_, idx) {
-                    final item = list[idx];
-                    return _TaskCard(
-                      key: ValueKey(
-                        '${dayKey.toIso8601String()}-${shift.name}-$idx-${item.seriesId}',
+              Expanded(
+                child: list.isEmpty
+                    ? Center(
+                        child: _EmptyShiftState(
+                          isDragOver: isDragOver,
+                          color: shiftColor,
+                        ),
+                      )
+                    : ReorderableListView.builder(
+                        padding: const EdgeInsets.all(8),
+                        itemCount: list.length,
+                        buildDefaultDragHandles: false,
+                        onReorder: onReorder,
+                        header: fixedHomeAddress == null
+                            ? null
+                            : Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: _FixedEndpointCard(
+                                  text: fixedHomeAddress!.address,
+                                  isStart: true,
+                                ),
+                              ),
+                        footer: fixedHomeAddress == null
+                            ? null
+                            : Padding(
+                                padding: const EdgeInsets.only(
+                                  top: 8,
+                                  bottom: 4,
+                                ),
+                                child: _FixedEndpointCard(
+                                  text: fixedHomeAddress!.address,
+                                  isStart: false,
+                                ),
+                              ),
+                        itemBuilder: (_, idx) {
+                          final item = list[idx];
+                          return _TaskCard(
+                            key: ValueKey(
+                              '${dayKey.toIso8601String()}-${shift.name}-$idx-${item.seriesId}',
+                            ),
+                            item: item,
+                            index: idx,
+                            accent: accent,
+                            onEdit: () => onEditItem(idx),
+                            movePayload: buildMovePayload(idx),
+                          );
+                        },
                       ),
-                      item: item,
-                      index: idx,
-                      accent: accent,
-                      onEdit: () => onEditItem(idx),
-                      movePayload: buildMovePayload(idx),
-                    );
-                  },
-                ),
+              ),
             ],
           ),
         );
@@ -1597,6 +1629,71 @@ class _EmptyShiftState extends StatelessWidget {
                   fontWeight: FontWeight.w300,
                 ),
               ),
+      ),
+    );
+  }
+}
+
+class _FixedEndpointCard extends StatelessWidget {
+  const _FixedEndpointCard({required this.text, required this.isStart});
+
+  final String text;
+  final bool isStart;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isStart ? const Color(0xFF43A047) : const Color(0xFF1A3A5C);
+    final icon = isStart ? Icons.home_rounded : Icons.keyboard_return_rounded;
+    final label = isStart ? 'BAŞLANGIÇ EVİ' : 'EVE DÖNÜŞ';
+
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7FAFF),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+      child: Row(
+        children: [
+          Container(
+            width: 24,
+            height: 24,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, size: 13, color: color),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.6,
+                  ),
+                ),
+                const SizedBox(height: 1),
+                Text(
+                  text,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _C.textDark,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                    height: 1.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
