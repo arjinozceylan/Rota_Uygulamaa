@@ -4,15 +4,19 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:provider/provider.dart';
 
 import '../core/models/address.dart';
 import '../data/address_store.dart';
 import '../models/calendar_event.dart';
+import '../models/vehicle_workspace.dart';
+import 'fleet_state.dart';
 import '../screens/map_picker_page.dart';
 import '../screens/osm_places_service.dart';
 import '../screens/calendar_page.dart';
 import 'osrm_route_service.dart';
 import 'reports_page.dart';
+import '../widgets/vehicle_selector_bar.dart';
 import 'tsp_optimizer_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -162,23 +166,28 @@ class _HomePageState extends State<HomePage> {
   bool _isSearching = false;
   List<Address> _suggestions = [];
 
-  // ── Adres havuzu + rota kuyruğu ──────────────────────────────────────────
-  // addressCards: sol paneldeki sürüklenebilir kartlar
+  // ── Adres havuzu + araç bazlı rota workspace'i ──────────────────────────
+  // addressCards: sol paneldeki ortak sürüklenebilir adres havuzu
   final List<String> addressCards = [];
-  // dropped: sağ panele (rota kuyruğuna) eklenmiş adresler — OSRM buradan çalışır
-  final List<String> dropped = [];
-  final Map<String, RepeatType> repeatByAddress = {};
 
-  // Başlangıç adresi
-  Address? fixedHomeAddress;
+  VehicleWorkspace _ws(BuildContext context) =>
+      context.read<FleetState>().activeWorkspace;
+
+  List<String> get dropped => _currentWorkspace.dropped;
+  Map<String, RepeatType> get repeatByAddress =>
+      _currentWorkspace.repeatByAddress;
+  Address? get fixedHomeAddress => _currentWorkspace.fixedHomeAddress;
+  set fixedHomeAddress(Address? value) =>
+      _currentWorkspace.fixedHomeAddress = value;
+
   bool get hasFixedHome =>
       fixedHomeAddress != null &&
       fixedHomeAddress!.lat != null &&
       fixedHomeAddress!.lng != null;
+
   // Geçici uyumluluk katmanı:
   // Eski kodun birçok yeri hâlâ `selectedStartAddress` (String?) kullanıyor.
-  // Yeni mimaride sabit başlangıç `fixedHomeAddress` olacak, ama önce derlemeyi
-  // toparlamak için bu adapter'ı kullanıyoruz.
+  // Yeni mimaride sabit başlangıç `fixedHomeAddress` olacak.
   String? get selectedStartAddress => fixedHomeAddress?.address;
 
   set selectedStartAddress(String? value) {
@@ -206,6 +215,10 @@ class _HomePageState extends State<HomePage> {
   int _summaryTotalMin = 0;
   double _summaryTotalKm = 0;
   bool _summaryHasData = false;
+
+  VehicleWorkspace get _currentWorkspace => _fleetState.activeWorkspace;
+
+  FleetState get _fleetState => context.read<FleetState>();
 
   // ── Arama geçmişi (son 5) ────────────────────────────────────────────────
   final List<String> _searchHistory = [];
@@ -352,13 +365,14 @@ class _HomePageState extends State<HomePage> {
 
     final home = _makeMapPickedAddress(res);
 
-    setState(() {
-      fixedHomeAddress = home;
+    _fleetState.updateActiveWorkspace((ws) {
+      ws.fixedHomeAddress = home;
     });
 
     // Ev adresi havuzda da görünsün; tekrar eklenmesini engelleyen mantık zaten var.
     _addAddressToPoolAndCards(home);
 
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Sabit ev/başlangıç konumu ayarlandı: ${home.address}'),
@@ -385,6 +399,7 @@ class _HomePageState extends State<HomePage> {
       setState(() {
         dropped.add(value);
       });
+      _fleetState.markDirty();
     }
   }
 
@@ -392,6 +407,7 @@ class _HomePageState extends State<HomePage> {
     setState(() {
       dropped.remove(value);
     });
+    _fleetState.markDirty();
   }
 
   void _clearQueue() {
@@ -399,6 +415,7 @@ class _HomePageState extends State<HomePage> {
       dropped.clear();
       repeatByAddress.clear();
     });
+    _fleetState.markDirty();
   }
 
   // ── CSV import ────────────────────────────────────────────────────────────
@@ -613,6 +630,7 @@ class _HomePageState extends State<HomePage> {
           totalMin: totalMin,
           totalKm: totalKm,
           path: path,
+          vehicleId: _fleetState.activeVehicle,
         ),
       );
       setState(() {
@@ -647,6 +665,7 @@ class _HomePageState extends State<HomePage> {
   // ─────────────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    context.watch<FleetState>();
     return Scaffold(
       backgroundColor: _T.bg,
       body: Row(
@@ -667,7 +686,10 @@ class _HomePageState extends State<HomePage> {
               if (i == 3) {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const CalendarPage()),
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        CalendarPage(fixedHomeAddress: fixedHomeAddress),
+                  ),
                 ).then(
                   (_) => setState(() {
                     for (final a in AddressStore.items) {
@@ -693,9 +715,42 @@ class _HomePageState extends State<HomePage> {
           Expanded(
             child: Column(
               children: [
-                // Mod geçiş butonları
                 Padding(
                   padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Expanded(child: VehicleSelectorBar()),
+                      const SizedBox(width: 14),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            _fleetState.activeVehicle.label,
+                            style: const TextStyle(
+                              color: _T.textDark,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 15,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            'Aktif araç çalışma alanı',
+                            style: TextStyle(
+                              color: _T.textLight,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                // Mod geçiş butonları
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 0),
                   child: Row(
                     children: [
                       _ModeToggleButton(

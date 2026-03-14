@@ -1,8 +1,15 @@
 import 'package:flutter/material.dart';
 import 'screens/login_page.dart';
+import 'package:provider/provider.dart';
+import 'services/fleet_state.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => FleetState(),
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {

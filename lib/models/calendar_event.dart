@@ -1,3 +1,5 @@
+enum ShiftType { morning, afternoon }
+
 enum RepeatType { none, daily, weekly, monthly }
 
 extension RepeatTypeLabel on RepeatType {

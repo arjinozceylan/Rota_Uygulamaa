@@ -1,11 +1,14 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-
+import 'package:provider/provider.dart';
 import '../models/calendar_event.dart';
 import '../data/address_store.dart';
 import '../core/models/address.dart';
 import '../services/osrm_route_service.dart';
 import '../services/tsp_optimizer_service.dart';
+import '../models/vehicle_workspace.dart';
+import '../services/fleet_state.dart';
+import '../widgets/vehicle_selector_bar.dart';
 
 // Vardiya tipi — VisitPlanItem.shift alanı ile eşleşir
 // (Aynı tanım calendar_event.dart/auth_service.dart'a da eklenecek)
@@ -43,8 +46,6 @@ const _dayColors = [
   Color(0xFF53D6FF),
   Color(0xFF53D6FF),
 ];
-
-enum ShiftType { morning, afternoon }
 
 extension ShiftLabel on ShiftType {
   String get label => this == ShiftType.morning ? 'Sabah' : 'Öğleden Sonra';
@@ -94,15 +95,22 @@ class _CalendarPageState extends State<CalendarPage>
 
   late DateTime weekStart;
   late DateTime selectedDay;
-  // Gün → Vardiya → Görev listesi
-  final Map<DateTime, Map<ShiftType, List<VisitPlanItem>>> _planByDay = {};
   final OsrmRouteService _osrm = const OsrmRouteService();
   final TspOptimizerService _tsp = const TspOptimizerService();
-  final Map<DateTime, Map<ShiftType, String?>> _forcedFirstStopByDay = {};
   // animasyon — hafta geçişi
   late AnimationController _weekCtrl;
   late Animation<double> _weekFade;
+  FleetState get _fleetState => context.read<FleetState>();
 
+  VehicleWorkspace get _currentWorkspace => _fleetState.activeWorkspace;
+
+  Map<DateTime, Map<ShiftType, List<VisitPlanItem>>> get _planByDay =>
+      _currentWorkspace.planByDay;
+
+  Map<DateTime, Map<ShiftType, String?>> get _forcedFirstStopByDay =>
+      _currentWorkspace.forcedFirstStopByDay;
+
+  Address? get _fixedHomeAddress => _currentWorkspace.fixedHomeAddress;
   @override
   void initState() {
     super.initState();
@@ -254,6 +262,7 @@ class _CalendarPageState extends State<CalendarPage>
 
     // Her reorder sonrası algoritma tekrar düzenlesin.
     _optimizeShiftForDay(dayKey, shift);
+    _fleetState.markDirty();
   }
 
   void _moveItemToDay(
@@ -278,6 +287,9 @@ class _CalendarPageState extends State<CalendarPage>
       fromList.removeAt(payload.fromIndex);
       _listForShift(toKey, targetShift).add(payload.item);
     });
+    _optimizeShiftForDay(fromKey, fromShift);
+    _optimizeShiftForDay(toKey, targetShift);
+    _fleetState.markDirty();
   }
 
   // ── Dialogs ───────────────────────────────────────────────────────────────
@@ -321,6 +333,7 @@ class _CalendarPageState extends State<CalendarPage>
 
     // Yeni adres eklendikten sonra o vardiyayı otomatik optimize et.
     await _optimizeShiftForDay(dayKey, shift);
+    _fleetState.markDirty();
   }
 
   Future<void> _editItem(DateTime dayKey, ShiftType shift, int index) async {
@@ -333,6 +346,7 @@ class _CalendarPageState extends State<CalendarPage>
       _removeSeriesEverywhere(old.seriesId);
       _addWithRepeat(baseDay: dayKey, item: updated, shift: shift);
     });
+    _fleetState.markDirty();
   }
 
   Address? _addressByTitle(String title) {
@@ -458,7 +472,7 @@ class _CalendarPageState extends State<CalendarPage>
   }
 
   Future<void> _optimizeShiftForDay(DateTime dayKey, ShiftType shift) async {
-    final home = widget.fixedHomeAddress;
+    final home = _fixedHomeAddress;
     if (home == null || home.lat == null || home.lng == null) {
       _toast('Önce sabit ev/başlangıç konumu belirlenmeli.');
       return;
@@ -587,6 +601,7 @@ class _CalendarPageState extends State<CalendarPage>
   // ── BUILD ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    context.watch<FleetState>();
     final days = List<DateTime>.generate(
       7,
       (i) => weekStart.add(Duration(days: i)),
@@ -605,6 +620,40 @@ class _CalendarPageState extends State<CalendarPage>
       backgroundColor: _C.bg,
       body: Column(
         children: [
+          // ── Araç Seçici ────────────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Expanded(child: VehicleSelectorBar()),
+                const SizedBox(width: 14),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      _fleetState.activeVehicle.label,
+                      style: const TextStyle(
+                        color: _C.textDark,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 15,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Aktif araç takvimi',
+                      style: TextStyle(
+                        color: _C.textLight,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
           // ── Top Bar ─────────────────────────────────────────────────────
           _TopBar(
             weekLabel: weekLabel,
@@ -664,7 +713,7 @@ class _CalendarPageState extends State<CalendarPage>
                       isSelected: isSel,
                       isToday: isToday,
                       maxDaily: maxDaily,
-                      fixedHomeAddress: widget.fixedHomeAddress,
+                      fixedHomeAddress: _fixedHomeAddress,
                       onTapHeader: () => setState(() => selectedDay = dayKey),
                       onAcceptDrop: (data, shift) {
                         if (data is Address)
