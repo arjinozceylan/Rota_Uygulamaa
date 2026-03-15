@@ -162,6 +162,33 @@ class _CalendarPageState extends State<CalendarPage>
       );
   }
 
+  void _showRecalcBanner(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(child: Text(msg)),
+            ],
+          ),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
+          backgroundColor: _C.accentNav,
+        ),
+      );
+  }
+
   int _countForDay(DateTime dayKey) {
     final m = _planByDay[dayKey];
     if (m == null) return 0;
@@ -244,6 +271,8 @@ class _CalendarPageState extends State<CalendarPage>
     final list = _planByDay[dayKey]?[shift];
     if (list == null || oldIndex < 0 || oldIndex >= list.length) return;
 
+    final previousForced = _forcedFirstTitle(dayKey, shift);
+
     if (newIndex > oldIndex) newIndex -= 1;
     if (newIndex < 0) newIndex = 0;
     if (newIndex >= list.length) newIndex = list.length - 1;
@@ -257,12 +286,19 @@ class _CalendarPageState extends State<CalendarPage>
 
     if (newIndex == 0) {
       _setForcedFirstTitle(dayKey, shift, movedTitle);
-      _toast('"$movedTitle" öncelikli ilk durak olarak ayarlandı.');
-    }
+      _showRecalcBanner(
+        'Rota yeniden hesaplanıyor: Başlangıç → $movedTitle → kalan adresler → Bitiş',
+      );
+    } else if (previousForced == movedTitle) {
+      // Önceden zorunlu ilk durak olan adres artık ilk sırada değilse constraint'i kaldır.
+      _setForcedFirstTitle(dayKey, shift, null);
+      _showRecalcBanner(
+        'Öncelikli ilk durak kaldırıldı, rota yeniden hesaplanıyor.',
+      );
 
-    // Her reorder sonrası algoritma tekrar düzenlesin.
-    _optimizeShiftForDay(dayKey, shift);
-    _fleetState.markDirty();
+      _optimizeShiftForDay(dayKey, shift);
+      _fleetState.markDirty();
+    }
   }
 
   void _moveItemToDay(
@@ -287,6 +323,7 @@ class _CalendarPageState extends State<CalendarPage>
       fromList.removeAt(payload.fromIndex);
       _listForShift(toKey, targetShift).add(payload.item);
     });
+    _showRecalcBanner('Rota yeniden hesaplanıyor...');
     _optimizeShiftForDay(fromKey, fromShift);
     _optimizeShiftForDay(toKey, targetShift);
     _fleetState.markDirty();
@@ -330,7 +367,7 @@ class _CalendarPageState extends State<CalendarPage>
     setState(() {
       _addWithRepeat(baseDay: dayKey, item: item, shift: shift);
     });
-
+    _showRecalcBanner('Yeni adrese göre rota yeniden hesaplanıyor...');
     // Yeni adres eklendikten sonra o vardiyayı otomatik optimize et.
     await _optimizeShiftForDay(dayKey, shift);
     _fleetState.markDirty();
@@ -342,6 +379,7 @@ class _CalendarPageState extends State<CalendarPage>
     final old = list[index];
     final updated = await _showAddOrEditDialog(title: old.title, existing: old);
     if (updated == null) return;
+    _showRecalcBanner('Adres güncellendi, rota yeniden hesaplanıyor...');
     setState(() {
       _removeSeriesEverywhere(old.seriesId);
       _addWithRepeat(baseDay: dayKey, item: updated, shift: shift);
@@ -1028,7 +1066,7 @@ class _AddressPickerControlState extends State<_AddressPickerControl> {
 
   @override
   void dispose() {
-    _removeOverlay();
+    _removeOverlay(skipSetState: true);
     super.dispose();
   }
 
@@ -1046,9 +1084,13 @@ class _AddressPickerControlState extends State<_AddressPickerControl> {
     setState(() => _open = true);
   }
 
-  void _removeOverlay() {
+  void _removeOverlay({bool skipSetState = false}) {
     _overlayEntry?.remove();
     _overlayEntry = null;
+    if (skipSetState) {
+      _open = false;
+      return;
+    }
     if (mounted) setState(() => _open = false);
   }
 
@@ -1589,51 +1631,84 @@ class _ShiftSection extends StatelessWidget {
               // Görev listesi
               Expanded(
                 child: list.isEmpty
-                    ? Center(
-                        child: _EmptyShiftState(
-                          isDragOver: isDragOver,
-                          color: shiftColor,
-                        ),
-                      )
-                    : ReorderableListView.builder(
+                    ? ListView(
                         padding: const EdgeInsets.all(8),
-                        itemCount: list.length,
-                        buildDefaultDragHandles: false,
-                        onReorder: onReorder,
-                        header: fixedHomeAddress == null
-                            ? null
-                            : Padding(
-                                padding: const EdgeInsets.only(bottom: 8),
-                                child: _FixedEndpointCard(
-                                  text: fixedHomeAddress!.address,
-                                  isStart: true,
-                                ),
+                        children: [
+                          if (fixedHomeAddress != null)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: _FixedEndpointCard(
+                                text: fixedHomeAddress!.address,
+                                isStart: true,
                               ),
-                        footer: fixedHomeAddress == null
-                            ? null
-                            : Padding(
-                                padding: const EdgeInsets.only(
-                                  top: 8,
-                                  bottom: 4,
-                                ),
-                                child: _FixedEndpointCard(
-                                  text: fixedHomeAddress!.address,
-                                  isStart: false,
-                                ),
-                              ),
-                        itemBuilder: (_, idx) {
-                          final item = list[idx];
-                          return _TaskCard(
-                            key: ValueKey(
-                              '${dayKey.toIso8601String()}-${shift.name}-$idx-${item.seriesId}',
                             ),
-                            item: item,
-                            index: idx,
-                            accent: accent,
-                            onEdit: () => onEditItem(idx),
-                            movePayload: buildMovePayload(idx),
-                          );
-                        },
+                          Center(
+                            child: _EmptyShiftState(
+                              isDragOver: isDragOver,
+                              color: shiftColor,
+                            ),
+                          ),
+                          if (fixedHomeAddress != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: _FixedEndpointCard(
+                                text: fixedHomeAddress!.address,
+                                isStart: false,
+                              ),
+                            ),
+                        ],
+                      )
+                    : ClipRRect(
+                        borderRadius: const BorderRadius.only(
+                          bottomLeft: Radius.circular(16),
+                          bottomRight: Radius.circular(16),
+                        ),
+                        child: ScrollConfiguration(
+                          behavior: const MaterialScrollBehavior().copyWith(
+                            scrollbars: true,
+                          ),
+                          child: ReorderableListView.builder(
+                            primary: false,
+                            padding: const EdgeInsets.all(8),
+                            itemCount: list.length,
+                            buildDefaultDragHandles: false,
+                            onReorder: onReorder,
+                            header: fixedHomeAddress == null
+                                ? null
+                                : Padding(
+                                    padding: const EdgeInsets.only(bottom: 8),
+                                    child: _FixedEndpointCard(
+                                      text: fixedHomeAddress!.address,
+                                      isStart: true,
+                                    ),
+                                  ),
+                            footer: fixedHomeAddress == null
+                                ? null
+                                : Padding(
+                                    padding: const EdgeInsets.only(
+                                      top: 8,
+                                      bottom: 4,
+                                    ),
+                                    child: _FixedEndpointCard(
+                                      text: fixedHomeAddress!.address,
+                                      isStart: false,
+                                    ),
+                                  ),
+                            itemBuilder: (_, idx) {
+                              final item = list[idx];
+                              return _TaskCard(
+                                key: ValueKey(
+                                  '${dayKey.toIso8601String()}-${shift.name}-$idx-${item.seriesId}',
+                                ),
+                                item: item,
+                                index: idx,
+                                accent: accent,
+                                onEdit: () => onEditItem(idx),
+                                movePayload: buildMovePayload(idx),
+                              );
+                            },
+                          ),
+                        ),
                       ),
               ),
             ],

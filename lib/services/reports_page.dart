@@ -241,72 +241,55 @@ class _ReportsPageState extends State<ReportsPage>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.04),
-                        blurRadius: 12,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      _ReportScopeChip(
-                        label: 'Tümü',
-                        selected: _target == _ReportTarget.all,
-                        onTap: () =>
-                            setState(() => _target = _ReportTarget.all),
-                      ),
-                      _ReportScopeChip(
-                        label: VehicleId.vehicle1.label,
-                        selected: _target == _ReportTarget.vehicle1,
-                        onTap: () {
-                          fleet.selectVehicle(VehicleId.vehicle1);
-                          setState(() => _target = _ReportTarget.vehicle1);
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: _CompactReportTargetBar(
+                        target: _target,
+                        onChanged: (next) {
+                          if (next != _ReportTarget.all) {
+                            fleet.selectVehicle(_vehicleFromTarget(next));
+                          }
+                          setState(() => _target = next);
                         },
                       ),
-                      _ReportScopeChip(
-                        label: VehicleId.vehicle2.label,
-                        selected: _target == _ReportTarget.vehicle2,
-                        onTap: () {
-                          fleet.selectVehicle(VehicleId.vehicle2);
-                          setState(() => _target = _ReportTarget.vehicle2);
-                        },
+                    ),
+                    const SizedBox(width: 14),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
                       ),
-                      _ReportScopeChip(
-                        label: VehicleId.vehicle3.label,
-                        selected: _target == _ReportTarget.vehicle3,
-                        onTap: () {
-                          fleet.selectVehicle(VehicleId.vehicle3);
-                          setState(() => _target = _ReportTarget.vehicle3);
-                        },
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
                       ),
-                      _ReportScopeChip(
-                        label: VehicleId.vehicle4.label,
-                        selected: _target == _ReportTarget.vehicle4,
-                        onTap: () {
-                          fleet.selectVehicle(VehicleId.vehicle4);
-                          setState(() => _target = _ReportTarget.vehicle4);
-                        },
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            _targetLabel(_target),
+                            style: const TextStyle(
+                              color: _C.textDark,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          const Text(
+                            'Rapor kapsamı',
+                            style: TextStyle(
+                              color: _C.textLight,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 10.5,
+                            ),
+                          ),
+                        ],
                       ),
-                      _ReportScopeChip(
-                        label: VehicleId.vehicle5.label,
-                        selected: _target == _ReportTarget.vehicle5,
-                        onTap: () {
-                          fleet.selectVehicle(VehicleId.vehicle5);
-                          setState(() => _target = _ReportTarget.vehicle5);
-                        },
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 10),
                 Text(
@@ -1624,7 +1607,7 @@ class _ReportScopeChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           decoration: BoxDecoration(
             color: selected ? const Color(0xFF1A3A5C) : const Color(0xFFF8FAFC),
             borderRadius: BorderRadius.circular(10),
@@ -1639,11 +1622,82 @@ class _ReportScopeChip extends StatelessWidget {
               label,
               style: TextStyle(
                 color: selected ? Colors.white : const Color(0xFF1A2236),
-                fontSize: 12.5,
+                fontSize: 11.5,
                 fontWeight: FontWeight.w800,
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CompactReportTargetBar extends StatelessWidget {
+  const _CompactReportTargetBar({
+    required this.target,
+    required this.onChanged,
+  });
+
+  final _ReportTarget target;
+  final ValueChanged<_ReportTarget> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            _ReportScopeChip(
+              label: 'Tümü',
+              selected: target == _ReportTarget.all,
+              onTap: () => onChanged(_ReportTarget.all),
+            ),
+            const SizedBox(width: 8),
+            _ReportScopeChip(
+              label: VehicleId.vehicle1.label,
+              selected: target == _ReportTarget.vehicle1,
+              onTap: () => onChanged(_ReportTarget.vehicle1),
+            ),
+            const SizedBox(width: 8),
+            _ReportScopeChip(
+              label: VehicleId.vehicle2.label,
+              selected: target == _ReportTarget.vehicle2,
+              onTap: () => onChanged(_ReportTarget.vehicle2),
+            ),
+            const SizedBox(width: 8),
+            _ReportScopeChip(
+              label: VehicleId.vehicle3.label,
+              selected: target == _ReportTarget.vehicle3,
+              onTap: () => onChanged(_ReportTarget.vehicle3),
+            ),
+            const SizedBox(width: 8),
+            _ReportScopeChip(
+              label: VehicleId.vehicle4.label,
+              selected: target == _ReportTarget.vehicle4,
+              onTap: () => onChanged(_ReportTarget.vehicle4),
+            ),
+            const SizedBox(width: 8),
+            _ReportScopeChip(
+              label: VehicleId.vehicle5.label,
+              selected: target == _ReportTarget.vehicle5,
+              onTap: () => onChanged(_ReportTarget.vehicle5),
+            ),
+          ],
         ),
       ),
     );

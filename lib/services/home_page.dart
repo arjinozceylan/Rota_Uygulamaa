@@ -369,8 +369,11 @@ class _HomePageState extends State<HomePage> {
       ws.fixedHomeAddress = home;
     });
 
-    // Ev adresi havuzda da görünsün; tekrar eklenmesini engelleyen mantık zaten var.
-    _addAddressToPoolAndCards(home);
+    setState(() {
+      addressCards.removeWhere((e) => e == home.address);
+      dropped.removeWhere((e) => e == home.address);
+      repeatByAddress.remove(home.address);
+    });
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -421,12 +424,22 @@ class _HomePageState extends State<HomePage> {
   // ── CSV import ────────────────────────────────────────────────────────────
   Future<void> _importAddressesFromExcel() async {
     try {
+      final isMacDesktop = Platform.isMacOS;
       final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: const ['csv'],
+        type: isMacDesktop ? FileType.any : FileType.custom,
+        allowedExtensions: isMacDesktop ? null : const ['csv'],
       );
       if (result == null || result.files.isEmpty) return;
-      final path = result.files.first.path;
+      final pickedFile = result.files.first;
+      final fileName = pickedFile.name.toLowerCase();
+      if (!fileName.endsWith('.csv')) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Lütfen .csv uzantılı bir dosya seçin')),
+        );
+        return;
+      }
+
+      final path = pickedFile.path;
       if (path == null) {
         ScaffoldMessenger.of(
           context,
