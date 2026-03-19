@@ -79,4 +79,49 @@ class OsmPlacesService {
         )
         .toList();
   }
+
+  /// Koordinattan adres bul (reverse geocoding)
+  Future<Address?> reverseGeocode({
+    required double lat,
+    required double lng,
+    String language = 'tr',
+  }) async {
+    final uri = Uri.https(_host, '/reverse', {
+      'lat': lat.toString(),
+      'lon': lng.toString(),
+      'format': 'jsonv2',
+      'addressdetails': '1',
+      'accept-language': language,
+    });
+
+    try {
+      final res = await http.get(
+        uri,
+        headers: {
+          'User-Agent': 'RotaUygulamaa/1.0 (local-dev)',
+          'Accept-Language': language,
+        },
+      );
+
+      if (res.statusCode != 200) return null;
+
+      final m = jsonDecode(res.body) as Map<String, dynamic>;
+      final display = (m['display_name'] ?? '').toString();
+      if (display.isEmpty) return null;
+
+      final osmType = (m['osm_type'] ?? 'osm').toString();
+      final osmId = (m['osm_id'] ?? m['place_id'] ?? '').toString();
+      final placeId = '\$osmType:\$osmId';
+
+      return Address(
+        code: 'C001',
+        address: display,
+        placeId: placeId,
+        lat: lat,
+        lng: lng,
+      );
+    } catch (e) {
+      return null;
+    }
+  }
 }

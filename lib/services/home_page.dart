@@ -8,6 +8,8 @@ import 'package:provider/provider.dart';
 
 import '../core/models/address.dart';
 import '../data/address_store.dart';
+import '../data/uploaded_files_store.dart';
+import '../screens/excel_uploads_page.dart';
 import '../models/calendar_event.dart';
 import '../models/vehicle_workspace.dart';
 import 'fleet_state.dart';
@@ -16,6 +18,7 @@ import '../screens/osm_places_service.dart';
 import '../screens/calendar_page.dart';
 import 'osrm_route_service.dart';
 import 'reports_page.dart';
+import '../screens/saved_routes_page.dart';
 import '../widgets/vehicle_selector_bar.dart';
 import 'tsp_optimizer_service.dart';
 
@@ -147,8 +150,9 @@ class _HomePageState extends State<HomePage> {
   static const _navItems = [
     _NavItem(icon: Icons.dashboard_rounded, label: 'Rota Paneli'),
     _NavItem(icon: Icons.table_chart_rounded, label: 'Excel Yükle'),
-    _NavItem(icon: Icons.folder_copy_rounded, label: 'Excel Yüklenleri'),
+    _NavItem(icon: Icons.folder_copy_rounded, label: 'Excel Yüklenenler'),
     _NavItem(icon: Icons.calendar_month_rounded, label: 'Takvim'),
+    _NavItem(icon: Icons.route_rounded, label: 'Oluşturulan Rotalar'),
     _NavItem(icon: Icons.bar_chart_rounded, label: 'Raporlar'),
   ];
 
@@ -383,9 +387,63 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  void _addManualAddress() {
+  static final _coordRegex = RegExp(
+    r'^\s*(-?\d{1,3}(?:[.,]\d+)?)[\s,;/]+(-?\d{1,3}(?:[.,]\d+)?)\s*$',
+  );
+
+  Future<void> _addManualAddress() async {
     final text = _manualCtrl.text.trim();
     if (text.isEmpty) return;
+
+    final match = _coordRegex.firstMatch(text);
+    if (match != null) {
+      final lat = double.tryParse(match.group(1)!.replaceAll(',', '.'));
+      final lng = double.tryParse(match.group(2)!.replaceAll(',', '.'));
+      if (lat != null && lng != null &&
+          lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+        setState(() => _manualCtrl.clear());
+        // Loading snackbar
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                SizedBox(
+                  width: 16, height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                ),
+                SizedBox(width: 12),
+                Text('Koordinat adresi bulunuyor...'),
+              ],
+            ),
+            duration: Duration(seconds: 5),
+          ),
+        );
+        final addr = await _placesService.reverseGeocode(lat: lat, lng: lng);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        if (addr != null) {
+          final code = 'C${(_manualCodeCounter++).toString().padLeft(3, "0")}';
+          _addAddressToPoolAndCards(addr.copyWith(code: code));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: const Color(0xFF1A3A5C),
+              content: Text(
+                "Adres bulundu: ${addr.address.split(',').take(2).join(', ')}",
+                style: const TextStyle(color: Colors.white),
+              ),
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Koordinat için adres bulunamadı')),
+          );
+        }
+        return;
+      }
+    }
+
+    // Normal metin girişi
     _addAddressToPoolAndCards(_makeManualAddress(text));
     setState(() => _manualCtrl.clear());
   }
@@ -523,6 +581,10 @@ class _HomePageState extends State<HomePage> {
       if (!mounted) return;
       Navigator.pop(context); // Progress dialog'u kapat
 
+      if (added > 0) {
+        UploadedFilesStore.add(pickedFile.name, added);
+      }
+
       final message = added == addressesToProcess.length
           ? '✅ $added adres CSV\'den başarıyla harita üzerine konumlandırıldı!'
           : '⚠️ $added / ${addressesToProcess.length} adres konumlandırıldı (Bazı adresler geocode edilemedi)';
@@ -653,6 +715,39 @@ class _HomePageState extends State<HomePage> {
         _summaryHasData = true;
       });
 
+      // ── Rota kaydedildi bildirimi ────────────────────────────────────
+      final routeNo = RouteStore.instance.recordsForVehicle(
+        _fleetState.activeVehicle,
+      ).length;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFF1A3A5C),
+          duration: const Duration(seconds: 4),
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle_rounded, color: Color(0xFF53D6FF), size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Rota #$routeNo kaydedildi — ${path.length - 1} durak, ${totalKm.toStringAsFixed(1)} km',
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          ),
+          action: SnackBarAction(
+            label: 'Raporlara Git',
+            textColor: const Color(0xFF53D6FF),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ReportsPage()),
+              );
+            },
+          ),
+        ),
+      );
+
       showDialog(
         context: context,
         builder: (_) => _RouteResultDialog(
@@ -696,6 +791,15 @@ class _HomePageState extends State<HomePage> {
                 _importAddressesFromExcel();
                 return;
               }
+              if (i == 2) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const ExcelUploadsPage(),
+                  ),
+                );
+                return;
+              }
               if (i == 3) {
                 Navigator.push(
                   context,
@@ -714,6 +818,13 @@ class _HomePageState extends State<HomePage> {
                 return;
               }
               if (i == 4) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SavedRoutesPage()),
+                );
+                return;
+              }
+              if (i == 5) {
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const ReportsPage()),
@@ -795,7 +906,7 @@ class _HomePageState extends State<HomePage> {
                       children: [
                         // Sol: Adres Arama Paneli
                         Expanded(
-                          flex: 3,
+                          flex: 2,
                           child: _SearchPanel(
                             mapMode: _mapMode,
                             searchCtrl: _searchCtrl,
@@ -825,6 +936,10 @@ class _HomePageState extends State<HomePage> {
                               });
                             },
                             onDropAddress: _dropAddress,
+                            onRemoveCard: (text) => setState(() {
+                              addressCards.remove(text);
+                              AddressStore.removeByAddress(text);
+                            }),
                           ),
                         ),
 
@@ -832,7 +947,7 @@ class _HomePageState extends State<HomePage> {
 
                         // Sağ: Rota Kuyruğu
                         SizedBox(
-                          width: 280,
+                          width: 380,
                           child: _QueuePanel(
                             dropped: dropped,
                             addressCards: addressCards,
@@ -853,7 +968,9 @@ class _HomePageState extends State<HomePage> {
                 // Alt çubuk
                 _BottomBar(
                   hasItems: dropped.isNotEmpty,
+                  hasAddresses: addressCards.isNotEmpty,
                   onClear: _clearQueue,
+                  onClearAddresses: () => setState(() => addressCards.clear()),
                   onCreateRoute: _runDemoRoute,
                   droppedCount: dropped.length,
                 ),
@@ -1186,6 +1303,7 @@ class _SearchPanel extends StatelessWidget {
     required this.onHistorySelect,
     required this.onAddSuggestion,
     required this.onDropAddress,
+    required this.onRemoveCard,
   });
 
   final bool mapMode;
@@ -1194,10 +1312,12 @@ class _SearchPanel extends StatelessWidget {
   final List<Address> suggestions;
   final List<String> searchHistory, addressCards, dropped;
   final bool showHistory;
-  final VoidCallback onOpenMap, onAddManual, onToggleHistory;
+  final VoidCallback onOpenMap, onToggleHistory;
+  final Future<void> Function() onAddManual;
   final ValueChanged<String> onHistorySelect;
   final ValueChanged<Address> onAddSuggestion;
   final ValueChanged<String> onDropAddress;
+  final ValueChanged<String> onRemoveCard;
 
   @override
   Widget build(BuildContext context) {
@@ -1459,7 +1579,11 @@ class _SearchPanel extends StatelessWidget {
                           ),
                           child: GestureDetector(
                             onTap: () => onDropAddress(text),
-                            child: _AddressRow(text: text, inQueue: inQueue),
+                            child: _AddressRow(
+                              text: text,
+                              inQueue: inQueue,
+                              onRemove: () => onRemoveCard(text),
+                            ),
                           ),
                         ),
                       );
@@ -1561,63 +1685,126 @@ class _SearchBar extends StatelessWidget {
   }
 }
 
-class _ManualBar extends StatelessWidget {
+class _ManualBar extends StatefulWidget {
   const _ManualBar({required this.ctrl, required this.onAdd});
   final TextEditingController ctrl;
-  final VoidCallback onAdd;
+  final Future<void> Function() onAdd;
+
+  @override
+  State<_ManualBar> createState() => _ManualBarState();
+}
+
+class _ManualBarState extends State<_ManualBar> {
+  static final _coordRegex = RegExp(
+    r'^\s*(-?\d{1,3}(?:[.,]\d+)?)[\s,;/]+(-?\d{1,3}(?:[.,]\d+)?)\s*$',
+  );
+
+  bool _isValid = false;
+
+  void _onChanged(String val) {
+    final match = _coordRegex.firstMatch(val.trim());
+    bool valid = false;
+    if (match != null) {
+      final lat = double.tryParse(match.group(1)!.replaceAll(',', '.'));
+      final lng = double.tryParse(match.group(2)!.replaceAll(',', '.'));
+      valid = lat != null && lng != null &&
+              lat >= -90 && lat <= 90 &&
+              lng >= -180 && lng <= 180;
+    }
+    if (valid != _isValid) setState(() => _isValid = valid);
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 48,
-      decoration: BoxDecoration(
-        color: _T.searchBg,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _T.stroke),
-      ),
-      child: Row(
-        children: [
-          const SizedBox(width: 14),
-          const Icon(Icons.edit_rounded, color: _T.textLight, size: 20),
-          const SizedBox(width: 10),
-          Expanded(
-            child: TextField(
-              controller: ctrl,
-              onSubmitted: (_) => onAdd(),
-              style: const TextStyle(
-                color: _T.textDark,
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-              ),
-              decoration: const InputDecoration(
-                hintText: 'Elle adres girin…',
-                hintStyle: TextStyle(color: _T.textLight, fontSize: 14),
-                border: InputBorder.none,
-                isDense: true,
-              ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          height: 48,
+          decoration: BoxDecoration(
+            color: _T.searchBg,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: _isValid ? _T.accent : _T.stroke,
+              width: _isValid ? 1.5 : 1,
             ),
           ),
-          GestureDetector(
-            onTap: onAdd,
-            child: Container(
-              margin: const EdgeInsets.only(right: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: _T.accent.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(10),
+          child: Row(
+            children: [
+              const SizedBox(width: 14),
+              Icon(
+                Icons.my_location_rounded,
+                color: _isValid ? _T.accent : _T.textLight,
+                size: 20,
               ),
-              child: const Text(
-                'Ekle',
-                style: TextStyle(
-                  color: _T.accent,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 13,
+              const SizedBox(width: 10),
+              Expanded(
+                child: TextField(
+                  controller: widget.ctrl,
+                  onChanged: _onChanged,
+                  onSubmitted: _isValid ? (_) => widget.onAdd() : null,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                    signed: true,
+                  ),
+                  style: TextStyle(
+                    color: _isValid ? _T.textDark : _T.textLight,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'Koordinat girin (örn: 38.4189, 27.1287)',
+                    hintStyle: const TextStyle(color: _T.textLight, fontSize: 13),
+                    border: InputBorder.none,
+                    isDense: true,
+                    errorText: widget.ctrl.text.isNotEmpty && !_isValid
+                        ? 'Geçerli koordinat formatı: 38.4189, 27.1287'
+                        : null,
+                    errorStyle: const TextStyle(fontSize: 0, height: 0),
+                  ),
                 ),
               ),
+              AnimatedOpacity(
+                opacity: _isValid ? 1.0 : 0.35,
+                duration: const Duration(milliseconds: 200),
+                child: GestureDetector(
+                  onTap: _isValid ? widget.onAdd : null,
+                  child: Container(
+                    margin: const EdgeInsets.only(right: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: _isValid
+                          ? _T.accent.withOpacity(0.15)
+                          : _T.strokeMid.withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      'Ekle',
+                      style: TextStyle(
+                        color: _isValid ? _T.accent : _T.textLight,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (widget.ctrl.text.isNotEmpty && !_isValid)
+          Padding(
+            padding: const EdgeInsets.only(top: 6, left: 14),
+            child: Text(
+              'Sadece koordinat girilebilir — örnek: 38.4189, 27.1287',
+              style: TextStyle(
+                color: _T.accentRed.withOpacity(0.8),
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
-        ],
-      ),
+      ],
     );
   }
 }
@@ -1652,9 +1839,14 @@ class _ProviderBadge extends StatelessWidget {
 }
 
 class _AddressRow extends StatelessWidget {
-  const _AddressRow({required this.text, required this.inQueue});
+  const _AddressRow({
+    required this.text,
+    required this.inQueue,
+    this.onRemove,
+  });
   final String text;
   final bool inQueue;
+  final VoidCallback? onRemove;
 
   @override
   Widget build(BuildContext context) {
@@ -1680,14 +1872,34 @@ class _AddressRow extends StatelessWidget {
               text,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: inQueue ? _T.textDark : _T.textDark,
+              style: const TextStyle(
+                color: _T.textDark,
                 fontWeight: FontWeight.w700,
                 fontSize: 13,
                 height: 1.3,
               ),
             ),
           ),
+          const SizedBox(width: 8),
+          // Eksi / sil butonu
+          GestureDetector(
+            onTap: onRemove,
+            child: Container(
+              width: 26,
+              height: 26,
+              decoration: BoxDecoration(
+                color: _T.accentRed.withOpacity(0.08),
+                shape: BoxShape.circle,
+                border: Border.all(color: _T.accentRed.withOpacity(0.25)),
+              ),
+              child: const Icon(
+                Icons.remove_rounded,
+                size: 14,
+                color: _T.accentRed,
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
           Icon(
             inQueue
                 ? Icons.check_circle_rounded
@@ -2574,12 +2786,15 @@ class _CountBadge extends StatelessWidget {
 class _BottomBar extends StatefulWidget {
   const _BottomBar({
     required this.hasItems,
+    required this.hasAddresses,
     required this.onClear,
+    required this.onClearAddresses,
     required this.onCreateRoute,
     required this.droppedCount,
   });
   final bool hasItems;
-  final VoidCallback onClear, onCreateRoute;
+  final bool hasAddresses;
+  final VoidCallback onClear, onClearAddresses, onCreateRoute;
   final int droppedCount;
 
   @override
@@ -2587,13 +2802,7 @@ class _BottomBar extends StatefulWidget {
 }
 
 class _BottomBarState extends State<_BottomBar> {
-  int _selectedFilter = 0;
-  static const _filters = [
-    ('Tümü', Icons.all_inclusive_rounded),
-    ('Acil', Icons.emergency_rounded),
-    ('Elektif', Icons.schedule_rounded),
-    ('Taburcu', Icons.logout_rounded),
-  ];
+
 
   @override
   Widget build(BuildContext context) {
@@ -2605,118 +2814,42 @@ class _BottomBarState extends State<_BottomBar> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // ── Hızlı filtreler ─────────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 10, 24, 0),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.filter_list_rounded,
-                  size: 15,
-                  color: _T.textLight,
+          if (widget.droppedCount > 0)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 10, 24, 0),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
                 ),
-                const SizedBox(width: 6),
-                const Text(
-                  'Hızlı Filtre:',
-                  style: TextStyle(
-                    color: _T.textLight,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1A3A5C).withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: const Color(0xFF1A3A5C).withOpacity(0.2),
                   ),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: List.generate(_filters.length, (i) {
-                        final (label, icon) = _filters[i];
-                        final sel = i == _selectedFilter;
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 6),
-                          child: GestureDetector(
-                            onTap: () => setState(() => _selectedFilter = i),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 160),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 6,
-                              ),
-                              decoration: BoxDecoration(
-                                color: sel
-                                    ? _T.accent.withOpacity(0.12)
-                                    : Colors.transparent,
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(
-                                  color: sel ? _T.accent : _T.stroke,
-                                  width: sel ? 1.5 : 1,
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    icon,
-                                    size: 13,
-                                    color: sel ? _T.accent : _T.textLight,
-                                  ),
-                                  const SizedBox(width: 5),
-                                  Text(
-                                    label,
-                                    style: TextStyle(
-                                      color: sel ? _T.accent : _T.textLight,
-                                      fontSize: 12,
-                                      fontWeight: sel
-                                          ? FontWeight.w800
-                                          : FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        );
-                      }),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.local_hospital_rounded,
+                      size: 12,
+                      color: Color(0xFF1A3A5C),
                     ),
-                  ),
-                ),
-                // Transfer sayacı
-                if (widget.droppedCount > 0)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1A3A5C).withOpacity(0.08),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: const Color(0xFF1A3A5C).withOpacity(0.2),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${widget.droppedCount} Transfer',
+                      style: const TextStyle(
+                        color: Color(0xFF1A3A5C),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.local_hospital_rounded,
-                          size: 12,
-                          color: Color(0xFF1A3A5C),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${widget.droppedCount} Transfer',
-                          style: const TextStyle(
-                            color: Color(0xFF1A3A5C),
-                            fontSize: 11,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-              ],
+                  ],
+                ),
+              ),
             ),
-          ),
 
           // ── Eylem butonları ─────────────────────────────────────────────
           Padding(
@@ -2725,19 +2858,45 @@ class _BottomBarState extends State<_BottomBar> {
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: widget.hasItems ? widget.onClear : null,
-                    icon: const Icon(Icons.delete_outline_rounded),
-                    label: const Text('Temizle'),
+                    onPressed: widget.hasAddresses ? widget.onClearAddresses : null,
+                    icon: const Icon(Icons.list_alt_rounded),
+                    label: const Text('Adresleri Temizle'),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: _T.accentRed,
-                      side: const BorderSide(color: _T.accentRed, width: 1.2),
+                      side: BorderSide(
+                        color: widget.hasAddresses ? _T.accentRed : _T.strokeMid,
+                        width: 1.2,
+                      ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14),
                       ),
                       padding: const EdgeInsets.symmetric(vertical: 13),
                       textStyle: const TextStyle(
                         fontWeight: FontWeight.w800,
-                        fontSize: 14,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: widget.hasItems ? widget.onClear : null,
+                    icon: const Icon(Icons.alt_route_rounded),
+                    label: const Text('Rotayı Temizle'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: _T.accentRed,
+                      side: BorderSide(
+                        color: widget.hasItems ? _T.accentRed : _T.strokeMid,
+                        width: 1.2,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      textStyle: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 13,
                       ),
                     ),
                   ),

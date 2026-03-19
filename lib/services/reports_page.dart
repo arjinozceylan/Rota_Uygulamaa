@@ -101,12 +101,26 @@ class RouteStore {
     return ReportDataset(recordsForVehicle(_vehicleFromTargetStatic(target)));
   }
 
+  bool _isDuplicate(RouteRecord r, List<RouteRecord> list) {
+    return list.any((existing) =>
+        existing.path.length == r.path.length &&
+        existing.totalMin == r.totalMin &&
+        existing.totalKm.toStringAsFixed(1) == r.totalKm.toStringAsFixed(1) &&
+        List.generate(existing.path.length, (i) => existing.path[i] == r.path[i])
+            .every((same) => same));
+  }
+
   void add(RouteRecord r) {
     if (r.vehicleId == null) {
-      _legacyRecords.insert(0, r);
+      if (!_isDuplicate(r, _legacyRecords)) {
+        _legacyRecords.insert(0, r);
+      }
       return;
     }
-    _vehicleRecords[r.vehicleId!]!.insert(0, r);
+    final list = _vehicleRecords[r.vehicleId!]!;
+    if (!_isDuplicate(r, list)) {
+      list.insert(0, r);
+    }
   }
 
   void clear() {
