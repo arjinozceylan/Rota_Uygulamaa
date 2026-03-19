@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 
 import '../core/models/address.dart';
 import '../data/address_store.dart';
+import '../data/app_storage.dart';
 import '../data/uploaded_files_store.dart';
 import '../screens/excel_uploads_page.dart';
 import '../models/calendar_event.dart';
@@ -136,7 +137,8 @@ List<int> _twoOptIdx(OsrmMatrix m, List<int> path) {
 // HOME PAGE
 // ─────────────────────────────────────────────────────────────────────────────
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  const HomePage({super.key, this.initialAddressCards = const []});
+  final List<String> initialAddressCards;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -172,7 +174,7 @@ class _HomePageState extends State<HomePage> {
 
   // ── Adres havuzu + araç bazlı rota workspace'i ──────────────────────────
   // addressCards: sol paneldeki ortak sürüklenebilir adres havuzu
-  final List<String> addressCards = [];
+  late final List<String> addressCards;
 
   VehicleWorkspace _ws(BuildContext context) =>
       context.read<FleetState>().activeWorkspace;
@@ -229,8 +231,19 @@ class _HomePageState extends State<HomePage> {
   bool _showHistory = false;
 
   @override
+  Future<void> _persist() async {
+    await AppStorage.instance.saveAll(
+      addressCards: addressCards,
+      fleet: context.read<FleetState>().fleetView,
+    );
+  }
+
+  @override
   void initState() {
     super.initState();
+    // Kalıcı depodan gelen kartlarla başlat
+    addressCards = List<String>.from(widget.initialAddressCards);
+    // AddressStore'da olup listede olmayan adresleri de ekle
     for (final a in AddressStore.items) {
       final text = a.address;
       if (!addressCards.contains(text)) addressCards.insert(0, text);
@@ -345,6 +358,7 @@ class _HomePageState extends State<HomePage> {
       AddressStore.add(addressObj);
       if (!addressCards.contains(a)) addressCards.insert(0, a);
     });
+    _persist();
   }
 
   Future<void> _openMapPicker() async {
@@ -477,6 +491,7 @@ class _HomePageState extends State<HomePage> {
       repeatByAddress.clear();
     });
     _fleetState.markDirty();
+    _persist();
   }
 
   // ── CSV import ────────────────────────────────────────────────────────────
@@ -583,6 +598,7 @@ class _HomePageState extends State<HomePage> {
 
       if (added > 0) {
         UploadedFilesStore.add(pickedFile.name, added);
+        await AppStorage.instance.saveUploads();
       }
 
       final message = added == addressesToProcess.length
@@ -708,6 +724,7 @@ class _HomePageState extends State<HomePage> {
           vehicleId: _fleetState.activeVehicle,
         ),
       );
+      AppStorage.instance.saveRoutes();
       setState(() {
         _summaryTransferCount = path.length - 1;
         _summaryTotalMin = totalMin;
@@ -939,6 +956,7 @@ class _HomePageState extends State<HomePage> {
                             onRemoveCard: (text) => setState(() {
                               addressCards.remove(text);
                               AddressStore.removeByAddress(text);
+                              _persist();
                             }),
                           ),
                         ),

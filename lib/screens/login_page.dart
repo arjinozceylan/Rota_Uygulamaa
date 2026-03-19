@@ -5,7 +5,8 @@ import '../services/auth_service.dart';
 enum _LoginMode { guest, existing }
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
+  const LoginPage({super.key, this.initialAddressCards = const []});
+  final List<String> initialAddressCards;
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -32,7 +33,11 @@ class _LoginPageState extends State<LoginPage> {
   void _goHome() {
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (_) => const HomePage()),
+      MaterialPageRoute(
+        builder: (_) => HomePage(
+          initialAddressCards: widget.initialAddressCards,
+        ),
+      ),
     );
   }
 

@@ -2,18 +2,37 @@ import 'package:flutter/material.dart';
 import 'screens/login_page.dart';
 import 'package:provider/provider.dart';
 import 'services/fleet_state.dart';
+import 'data/app_storage.dart';
+import 'data/uploaded_files_store.dart';
+import 'services/reports_page.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Kayıtlı verileri yükle
+  final stored = await AppStorage.instance.loadAll();
+
+  // RouteStore'a rotaları yükle
+  for (final r in stored.routes) {
+    RouteStore.instance.add(r);
+  }
+
+  // UploadedFilesStore'a yüklenen dosyaları yükle
+  for (final f in stored.uploads) {
+    UploadedFilesStore.addDirect(f);
+  }
+
   runApp(
     ChangeNotifierProvider(
-      create: (_) => FleetState(),
-      child: const MyApp(),
+      create: (_) => FleetState(fleet: stored.fleet),
+      child: MyApp(initialAddressCards: stored.addressCards),
     ),
   );
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final List<String> initialAddressCards;
+  const MyApp({super.key, required this.initialAddressCards});
 
   static const accent = Color(0xFF53D6FF);
 
@@ -65,7 +84,7 @@ class MyApp extends StatelessWidget {
           suffixIconColor: Colors.white.withOpacity(0.70),
         ),
       ),
-      home: const LoginPage(),
+      home: LoginPage(initialAddressCards: initialAddressCards),
     );
   }
 }

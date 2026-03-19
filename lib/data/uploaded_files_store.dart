@@ -26,5 +26,10 @@ class UploadedFilesStore {
     );
   }
 
+  // Kayıtlı veriyi yüklerken kullan (tarih korunur)
+  static void addDirect(UploadedFile file) {
+    _files.add(file);
+  }
+
   static void clear() => _files.clear();
 }
