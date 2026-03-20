@@ -106,7 +106,8 @@ class RouteStore {
         existing.path.length == r.path.length &&
         existing.totalMin == r.totalMin &&
         existing.totalKm.toStringAsFixed(1) == r.totalKm.toStringAsFixed(1) &&
-        List.generate(existing.path.length, (i) => existing.path[i] == r.path[i])
+        List.generate(
+                existing.path.length, (i) => existing.path[i] == r.path[i])
             .every((same) => same));
   }
 
@@ -329,24 +330,7 @@ class _ReportsPageState extends State<ReportsPage>
                 Row(
                   children: [
                     // Geri butonu
-                    InkWell(
-                      onTap: () => Navigator.of(context).maybePop(),
-                      borderRadius: BorderRadius.circular(10),
-                      child: Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.08),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Icon(
-                          Icons.arrow_back_ios_new_rounded,
-                          color: Colors.white,
-                          size: 16,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
+
                     Container(
                       width: 40,
                       height: 40,
@@ -617,7 +601,7 @@ class _StatsTab extends StatelessWidget {
                   value: dataset.totalRoutes == 0
                       ? '—'
                       : (dataset.totalTransfers / dataset.totalRoutes)
-                            .toStringAsFixed(1),
+                          .toStringAsFixed(1),
                   color: _C.red,
                   small: true,
                 ),
@@ -969,8 +953,8 @@ class _FillTab extends StatelessWidget {
     final maxCount = days.isEmpty
         ? 1
         : days
-              .map((d) => d.morningCount + d.afternoonCount)
-              .reduce((a, b) => a > b ? a : b);
+            .map((d) => d.morningCount + d.afternoonCount)
+            .reduce((a, b) => a > b ? a : b);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
@@ -1421,15 +1405,15 @@ class _HistoryTab extends StatelessWidget {
                         color: isFirst
                             ? _C.green.withOpacity(0.08)
                             : isLast
-                            ? _C.accentNav.withOpacity(0.08)
-                            : _C.cardBg,
+                                ? _C.accentNav.withOpacity(0.08)
+                                : _C.cardBg,
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
                           color: isFirst
                               ? _C.green.withOpacity(0.3)
                               : isLast
-                              ? _C.accentNav.withOpacity(0.25)
-                              : _C.stroke,
+                                  ? _C.accentNav.withOpacity(0.25)
+                                  : _C.stroke,
                         ),
                       ),
                       child: Row(
@@ -1441,8 +1425,8 @@ class _HistoryTab extends StatelessWidget {
                               color: isFirst
                                   ? _C.green
                                   : isLast
-                                  ? _C.accentNav
-                                  : _C.textLight,
+                                      ? _C.accentNav
+                                      : _C.textLight,
                               fontWeight: FontWeight.w900,
                               fontSize: 10,
                             ),
@@ -1626,9 +1610,8 @@ class _ReportScopeChip extends StatelessWidget {
             color: selected ? const Color(0xFF1A3A5C) : const Color(0xFFF8FAFC),
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
-              color: selected
-                  ? const Color(0xFF1A3A5C)
-                  : const Color(0xFFD8E1EC),
+              color:
+                  selected ? const Color(0xFF1A3A5C) : const Color(0xFFD8E1EC),
             ),
           ),
           child: Center(

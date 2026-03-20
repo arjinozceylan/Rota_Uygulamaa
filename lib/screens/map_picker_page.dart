@@ -29,7 +29,10 @@ class _MapPickerPageState extends State<MapPickerPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Haritadan Seç')),
+      appBar: AppBar(
+        title: const Text('Haritadan Seç'),
+        automaticallyImplyLeading: false,
+      ),
       body: Stack(
         children: [
           FlutterMap(
@@ -64,7 +67,6 @@ class _MapPickerPageState extends State<MapPickerPage> {
                 ),
             ],
           ),
-
           Positioned(
             left: 12,
             right: 12,
@@ -94,16 +96,16 @@ class _MapPickerPageState extends State<MapPickerPage> {
                                 ),
                               )
                             : (_searchCtrl.text.isEmpty
-                                  ? null
-                                  : IconButton(
-                                      icon: const Icon(Icons.clear),
-                                      onPressed: () {
-                                        setState(() {
-                                          _searchCtrl.clear();
-                                          _hits = [];
-                                        });
-                                      },
-                                    )),
+                                ? null
+                                : IconButton(
+                                    icon: const Icon(Icons.clear),
+                                    onPressed: () {
+                                      setState(() {
+                                        _searchCtrl.clear();
+                                        _hits = [];
+                                      });
+                                    },
+                                  )),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -118,7 +120,6 @@ class _MapPickerPageState extends State<MapPickerPage> {
                         );
                       },
                     ),
-
                     if (_hits.isNotEmpty) ...[
                       const SizedBox(height: 8),
                       ConstrainedBox(
@@ -170,8 +171,7 @@ class _MapPickerPageState extends State<MapPickerPage> {
                       context,
                       MapPickResult(
                         point: p,
-                        label:
-                            _pickedLabel ??
+                        label: _pickedLabel ??
                             '${p.latitude.toStringAsFixed(5)}, ${p.longitude.toStringAsFixed(5)}',
                       ),
                     );
@@ -180,8 +180,8 @@ class _MapPickerPageState extends State<MapPickerPage> {
               _picked == null
                   ? 'Haritadan bir nokta seç'
                   : (_pickedLabel == null
-                        ? 'Seç (${_picked!.latitude.toStringAsFixed(5)}, ${_picked!.longitude.toStringAsFixed(5)})'
-                        : 'Seç: ${_pickedLabel!}'),
+                      ? 'Seç (${_picked!.latitude.toStringAsFixed(5)}, ${_picked!.longitude.toStringAsFixed(5)})'
+                      : 'Seç: ${_pickedLabel!}'),
             ),
           ),
         ),

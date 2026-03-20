@@ -5,6 +5,7 @@ import 'services/fleet_state.dart';
 import 'data/app_storage.dart';
 import 'data/uploaded_files_store.dart';
 import 'services/reports_page.dart';
+import 'router.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -43,7 +44,8 @@ class MyApp extends StatelessWidget {
       brightness: Brightness.dark,
     );
 
-    return MaterialApp(
+    return MaterialApp.router(
+      routerConfig: router,
       debugShowCheckedModeBanner: false,
       themeMode: ThemeMode.dark,
       darkTheme: ThemeData(
@@ -84,7 +86,6 @@ class MyApp extends StatelessWidget {
           suffixIconColor: Colors.white.withOpacity(0.70),
         ),
       ),
-      home: LoginPage(initialAddressCards: initialAddressCards),
     );
   }
 }

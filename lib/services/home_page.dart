@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart';
 
 import '../core/models/address.dart';
 import '../data/address_store.dart';
@@ -22,6 +23,7 @@ import 'reports_page.dart';
 import '../screens/saved_routes_page.dart';
 import '../widgets/vehicle_selector_bar.dart';
 import 'tsp_optimizer_service.dart';
+import '../screens/help_page.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TOKENS
@@ -362,10 +364,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _openMapPicker() async {
-    final res = await Navigator.push<MapPickResult>(
-      context,
-      MaterialPageRoute(builder: (_) => const MapPickerPage()),
-    );
+    final res = await context.push<MapPickResult>('/map-picker');
     if (!mounted || res == null) return;
     _addAddressToPoolAndCards(_makeMapPickedAddress(res));
     setState(() {
@@ -375,10 +374,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _pickFixedHomeAddress() async {
-    final res = await Navigator.push<MapPickResult>(
-      context,
-      MaterialPageRoute(builder: (_) => const MapPickerPage()),
-    );
+    final res = await context.push<MapPickResult>('/map-picker');
     if (!mounted || res == null) return;
 
     final home = _makeMapPickedAddress(res);
@@ -413,8 +409,12 @@ class _HomePageState extends State<HomePage> {
     if (match != null) {
       final lat = double.tryParse(match.group(1)!.replaceAll(',', '.'));
       final lng = double.tryParse(match.group(2)!.replaceAll(',', '.'));
-      if (lat != null && lng != null &&
-          lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+      if (lat != null &&
+          lng != null &&
+          lat >= -90 &&
+          lat <= 90 &&
+          lng >= -180 &&
+          lng <= 180) {
         setState(() => _manualCtrl.clear());
         // Loading snackbar
         ScaffoldMessenger.of(context).showSnackBar(
@@ -422,8 +422,10 @@ class _HomePageState extends State<HomePage> {
             content: Row(
               children: [
                 SizedBox(
-                  width: 16, height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white),
                 ),
                 SizedBox(width: 12),
                 Text('Koordinat adresi bulunuyor...'),
@@ -689,9 +691,8 @@ class _HomePageState extends State<HomePage> {
 
     try {
       final matrix = await _osrm.table(
-        coords: nodes
-            .map((a) => LatLng(a.lat!, a.lng!))
-            .toList(growable: false),
+        coords:
+            nodes.map((a) => LatLng(a.lat!, a.lng!)).toList(growable: false),
       );
 
       // OSRM duration matrix -> plain square cost matrix
@@ -733,21 +734,25 @@ class _HomePageState extends State<HomePage> {
       });
 
       // ── Rota kaydedildi bildirimi ────────────────────────────────────
-      final routeNo = RouteStore.instance.recordsForVehicle(
-        _fleetState.activeVehicle,
-      ).length;
+      final routeNo = RouteStore.instance
+          .recordsForVehicle(
+            _fleetState.activeVehicle,
+          )
+          .length;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: const Color(0xFF1A3A5C),
           duration: const Duration(seconds: 4),
           content: Row(
             children: [
-              const Icon(Icons.check_circle_rounded, color: Color(0xFF53D6FF), size: 20),
+              const Icon(Icons.check_circle_rounded,
+                  color: Color(0xFF53D6FF), size: 20),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   'Rota #$routeNo kaydedildi — ${path.length - 1} durak, ${totalKm.toStringAsFixed(1)} km',
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                  style: const TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.w700),
                 ),
               ),
             ],
@@ -756,10 +761,7 @@ class _HomePageState extends State<HomePage> {
             label: 'Raporlara Git',
             textColor: const Color(0xFF53D6FF),
             onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const ReportsPage()),
-              );
+              context.go('/reports');
             },
           ),
         ),
@@ -809,43 +811,31 @@ class _HomePageState extends State<HomePage> {
                 return;
               }
               if (i == 2) {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const ExcelUploadsPage(),
-                  ),
-                );
+                context.go('/excel-uploads');
                 return;
               }
               if (i == 3) {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        CalendarPage(fixedHomeAddress: fixedHomeAddress),
-                  ),
-                ).then(
-                  (_) => setState(() {
-                    for (final a in AddressStore.items) {
-                      if (!addressCards.contains(a.address))
-                        addressCards.insert(0, a.address);
-                    }
-                  }),
-                );
+                context
+                    .push(
+                      '/calendar',
+                      extra: fixedHomeAddress,
+                    )
+                    .then(
+                      (_) => setState(() {
+                        for (final a in AddressStore.items) {
+                          if (!addressCards.contains(a.address))
+                            addressCards.insert(0, a.address);
+                        }
+                      }),
+                    );
                 return;
               }
               if (i == 4) {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const SavedRoutesPage()),
-                );
+                context.go('/routes');
                 return;
               }
               if (i == 5) {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const ReportsPage()),
-                );
+                context.go('/reports');
                 return;
               }
               setState(() => _navIndex = i);
@@ -1091,7 +1081,7 @@ class _Sidebar extends StatelessWidget {
                   ),
                   const SizedBox(width: 10),
                   Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       const Text(
                         'Adres Havuzu',
@@ -1101,26 +1091,15 @@ class _Sidebar extends StatelessWidget {
                           fontSize: 13,
                         ),
                       ),
+                      const SizedBox(height: 2),
                       Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
                           Container(
                             width: 7,
                             height: 7,
-                            decoration: const BoxDecoration(
-                              color: _T.accentRed,
-                              shape: BoxShape.circle,
-                            ),
                           ),
                           const SizedBox(width: 4),
-                          const Text(
-                            'ÇEVRİMDİŞİ MOD',
-                            style: TextStyle(
-                              color: _T.accentRed,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 10,
-                              letterSpacing: 0.4,
-                            ),
-                          ),
                         ],
                       ),
                     ],
@@ -1170,9 +1149,8 @@ class _Sidebar extends StatelessWidget {
                               color: sel
                                   ? Colors.white
                                   : Colors.white.withOpacity(0.55),
-                              fontWeight: sel
-                                  ? FontWeight.w800
-                                  : FontWeight.w600,
+                              fontWeight:
+                                  sel ? FontWeight.w800 : FontWeight.w600,
                               fontSize: 13.5,
                             ),
                           ),
@@ -1198,37 +1176,25 @@ class _Sidebar extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 20),
             child: Row(
               children: [
-                CircleAvatar(
-                  radius: 20,
-                  backgroundColor: _T.accent.withOpacity(0.15),
-                  child: const Icon(
-                    Icons.person_rounded,
-                    color: _T.accent,
-                    size: 20,
+                GestureDetector(
+                  onTap: () {
+                    context.go('/help');
+                  },
+                  child: CircleAvatar(
+                    radius: 20,
+                    backgroundColor: _T.accent.withOpacity(0.15),
+                    child: const Icon(
+                      Icons.help_outline,
+                      color: _T.accent,
+                      size: 20,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Operations Manager',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 12,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      Text(
-                        'Sürüm v2.4.0',
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.42),
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
+                    children: [],
                   ),
                 ),
               ],
@@ -1630,26 +1596,28 @@ class _SearchBar extends StatelessWidget {
     return Container(
       height: 48,
       decoration: BoxDecoration(
-        color: _T.searchBg,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: _T.stroke),
       ),
       child: Row(
         children: [
           const SizedBox(width: 14),
-          const Icon(Icons.search_rounded, color: _T.textLight, size: 20),
+          const Icon(Icons.search_rounded, color: Colors.grey, size: 20),
           const SizedBox(width: 10),
           Expanded(
             child: TextField(
               controller: ctrl,
               style: const TextStyle(
-                color: _T.textDark,
+                color: Colors.black,
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
               ),
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: const Color(0xFF3DBFDB),
                 hintText: 'Haritadan adres ara',
-                hintStyle: TextStyle(color: _T.textLight, fontSize: 14),
+                hintStyle: TextStyle(color: Colors.white, fontSize: 14),
                 border: InputBorder.none,
                 isDense: true,
               ),
@@ -1691,12 +1659,6 @@ class _SearchBar extends StatelessWidget {
                 ),
               ),
             ),
-          _ProviderBadge(label: 'G', color: const Color(0xFF4285F4)),
-          const SizedBox(width: 6),
-          _ProviderBadge(label: 'Y', color: const Color(0xFFFF0000)),
-          const SizedBox(width: 6),
-          _ProviderBadge(label: 'H', color: const Color(0xFF00B0F0)),
-          const SizedBox(width: 10),
         ],
       ),
     );
@@ -1725,9 +1687,12 @@ class _ManualBarState extends State<_ManualBar> {
     if (match != null) {
       final lat = double.tryParse(match.group(1)!.replaceAll(',', '.'));
       final lng = double.tryParse(match.group(2)!.replaceAll(',', '.'));
-      valid = lat != null && lng != null &&
-              lat >= -90 && lat <= 90 &&
-              lng >= -180 && lng <= 180;
+      valid = lat != null &&
+          lng != null &&
+          lat >= -90 &&
+          lat <= 90 &&
+          lng >= -180 &&
+          lng <= 180;
     }
     if (valid != _isValid) setState(() => _isValid = valid);
   }
@@ -1740,19 +1705,16 @@ class _ManualBarState extends State<_ManualBar> {
         Container(
           height: 48,
           decoration: BoxDecoration(
-            color: _T.searchBg,
+            color: Colors.white,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: _isValid ? _T.accent : _T.stroke,
-              width: _isValid ? 1.5 : 1,
-            ),
+            border: Border.all(color: const Color(0xFFDDE3EA), width: 1),
           ),
           child: Row(
             children: [
               const SizedBox(width: 14),
               Icon(
                 Icons.my_location_rounded,
-                color: _isValid ? _T.accent : _T.textLight,
+                color: Colors.grey,
                 size: 20,
               ),
               const SizedBox(width: 10),
@@ -1766,16 +1728,21 @@ class _ManualBarState extends State<_ManualBar> {
                     signed: true,
                   ),
                   style: TextStyle(
-                    color: _isValid ? _T.textDark : _T.textLight,
+                    color: Colors.white,
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                   ),
                   decoration: InputDecoration(
+                    filled: true,
+                    fillColor: const Color(0xFF3DBFDB),
                     hintText: 'Koordinat girin (örn: 38.4189, 27.1287)',
-                    hintStyle: const TextStyle(color: _T.textLight, fontSize: 13),
+                    hintStyle: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14),
                     border: InputBorder.none,
                     isDense: true,
-                    errorText: widget.ctrl.text.isNotEmpty && !_isValid
+                    errorText: (widget.ctrl.text.isNotEmpty && !_isValid)
                         ? 'Geçerli koordinat formatı: 38.4189, 27.1287'
                         : null,
                     errorStyle: const TextStyle(fontSize: 0, height: 0),
@@ -1789,7 +1756,8 @@ class _ManualBarState extends State<_ManualBar> {
                   onTap: _isValid ? widget.onAdd : null,
                   child: Container(
                     margin: const EdgeInsets.only(right: 8),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                     decoration: BoxDecoration(
                       color: _isValid
                           ? _T.accent.withOpacity(0.15)
@@ -2048,7 +2016,6 @@ class _QueuePanel extends StatelessWidget {
             ),
           ),
           const Divider(color: _T.stroke, height: 1),
-
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
             child: Container(
@@ -2081,9 +2048,8 @@ class _QueuePanel extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: fixedHomeAddress != null
-                          ? _T.textDark
-                          : _T.textLight,
+                      color:
+                          fixedHomeAddress != null ? _T.textDark : _T.textLight,
                       fontSize: 12,
                       fontWeight: fixedHomeAddress != null
                           ? FontWeight.w700
@@ -2123,7 +2089,6 @@ class _QueuePanel extends StatelessWidget {
               ),
             ),
           ),
-
           Expanded(
             child: DragTarget<String>(
               onWillAccept: (_) => true,
@@ -2150,9 +2115,8 @@ class _QueuePanel extends StatelessWidget {
                           vertical: 10,
                         ),
                         decoration: BoxDecoration(
-                          color: isStart
-                              ? const Color(0xFFE8F5E9)
-                              : _T.searchBg,
+                          color:
+                              isStart ? const Color(0xFFE8F5E9) : _T.searchBg,
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
                             color: isStart
@@ -2250,9 +2214,8 @@ class _QueuePanel extends StatelessWidget {
                                   child: Icon(
                                     Icons.flag_rounded,
                                     size: 15,
-                                    color: isStart
-                                        ? Colors.green
-                                        : _T.textLight,
+                                    color:
+                                        isStart ? Colors.green : _T.textLight,
                                   ),
                                 ),
                               ),
@@ -2820,8 +2783,6 @@ class _BottomBar extends StatefulWidget {
 }
 
 class _BottomBarState extends State<_BottomBar> {
-
-
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -2876,13 +2837,15 @@ class _BottomBarState extends State<_BottomBar> {
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: widget.hasAddresses ? widget.onClearAddresses : null,
+                    onPressed:
+                        widget.hasAddresses ? widget.onClearAddresses : null,
                     icon: const Icon(Icons.list_alt_rounded),
                     label: const Text('Adresleri Temizle'),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: _T.accentRed,
                       side: BorderSide(
-                        color: widget.hasAddresses ? _T.accentRed : _T.strokeMid,
+                        color:
+                            widget.hasAddresses ? _T.accentRed : _T.strokeMid,
                         width: 1.2,
                       ),
                       shape: RoundedRectangleBorder(
@@ -3424,15 +3387,15 @@ class _RouteResultDialog extends StatelessWidget {
                                 color: isStart
                                     ? const Color(0xFFEEF8EE)
                                     : isEnd
-                                    ? const Color(0xFFEEF3FF)
-                                    : _T.searchBg,
+                                        ? const Color(0xFFEEF3FF)
+                                        : _T.searchBg,
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(
                                   color: isStart
                                       ? const Color(0xFF66BB6A).withOpacity(0.3)
                                       : isEnd
-                                      ? _T.accent.withOpacity(0.2)
-                                      : _T.stroke,
+                                          ? _T.accent.withOpacity(0.2)
+                                          : _T.stroke,
                                 ),
                               ),
                               child: Row(
@@ -3446,8 +3409,8 @@ class _RouteResultDialog extends StatelessWidget {
                                           isStart
                                               ? 'BAŞLANGIÇ'
                                               : isEnd
-                                              ? 'BİTİŞ'
-                                              : 'DURAK ${i}',
+                                                  ? 'BİTİŞ'
+                                                  : 'DURAK ${i}',
                                           style: TextStyle(
                                             color: dotColor,
                                             fontSize: 9,

@@ -556,9 +556,8 @@ class _CalendarPageState extends State<CalendarPage>
         final nodes = <Address>[home, ...stops];
 
         final matrix = await _osrm.table(
-          coords: nodes
-              .map((a) => LatLng(a.lat!, a.lng!))
-              .toList(growable: false),
+          coords:
+              nodes.map((a) => LatLng(a.lat!, a.lng!)).toList(growable: false),
         );
 
         final cost = List<List<double>>.generate(
@@ -736,11 +735,11 @@ class _CalendarPageState extends State<CalendarPage>
                     final isSel = _sameDay(dayKey, selectedDay);
                     final isToday = _isToday(day);
 
-                    final morningList =
-                        _planByDay[dayKey]?[ShiftType.morning] ??
+                    final morningList = _planByDay[dayKey]
+                            ?[ShiftType.morning] ??
                         <VisitPlanItem>[];
-                    final afternoonList =
-                        _planByDay[dayKey]?[ShiftType.afternoon] ??
+                    final afternoonList = _planByDay[dayKey]
+                            ?[ShiftType.afternoon] ??
                         <VisitPlanItem>[];
                     return _DayColumn(
                       day: day,
@@ -797,20 +796,20 @@ class _CalendarPageState extends State<CalendarPage>
   }
 
   String _monthShort(int m) => [
-    '',
-    'Oca',
-    'Şub',
-    'Mar',
-    'Nis',
-    'May',
-    'Haz',
-    'Tem',
-    'Ağu',
-    'Eyl',
-    'Eki',
-    'Kas',
-    'Ara',
-  ][m];
+        '',
+        'Oca',
+        'Şub',
+        'Mar',
+        'Nis',
+        'May',
+        'Haz',
+        'Tem',
+        'Ağu',
+        'Eyl',
+        'Eki',
+        'Kas',
+        'Ara',
+      ][m];
 
   String _fullDate(DateTime d) {
     const months = [
@@ -864,8 +863,6 @@ class _TopBar extends StatelessWidget {
       child: Row(
         children: [
           // Geri
-          _NavBtn(icon: Icons.arrow_back_ios_new_rounded, onTap: onBack),
-          const SizedBox(width: 4),
 
           // Hafta navigasyonu
           _NavBtn(icon: Icons.chevron_left_rounded, onTap: onPrevWeek),
@@ -1552,9 +1549,8 @@ class _ShiftSection extends StatelessWidget {
     // Her iki vardiya — aynı nötr ton, sadece ince sol çizgi ayrımı
     const shiftColor = Color(0xFF5A6A85);
     const shiftBg = Color(0xFFF7FAFF);
-    final borderAccent = isMorning
-        ? const Color(0xFF9DAFC8)
-        : const Color(0xFF53D6FF);
+    final borderAccent =
+        isMorning ? const Color(0xFF9DAFC8) : const Color(0xFF53D6FF);
 
     return DragTarget<Object>(
       onWillAcceptWithDetails: (_) => true,
@@ -1564,9 +1560,8 @@ class _ShiftSection extends StatelessWidget {
         return AnimatedContainer(
           duration: const Duration(milliseconds: 150),
           decoration: BoxDecoration(
-            color: isDragOver
-                ? _C.accent.withOpacity(0.04)
-                : Colors.transparent,
+            color:
+                isDragOver ? _C.accent.withOpacity(0.04) : Colors.transparent,
             border: isDragOver
                 ? Border.all(color: _C.accent.withOpacity(0.4), width: 1.5)
                 : null,
@@ -1847,15 +1842,15 @@ class _FillBadge extends StatelessWidget {
         color: full
             ? _C.red.withOpacity(0.12)
             : dark
-            ? Colors.white.withOpacity(0.12)
-            : color.withOpacity(0.10),
+                ? Colors.white.withOpacity(0.12)
+                : color.withOpacity(0.10),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: full
               ? _C.red.withOpacity(0.4)
               : dark
-              ? Colors.white.withOpacity(0.2)
-              : color.withOpacity(0.3),
+                  ? Colors.white.withOpacity(0.2)
+                  : color.withOpacity(0.3),
         ),
       ),
       child: Text(
@@ -1864,8 +1859,8 @@ class _FillBadge extends StatelessWidget {
           color: full
               ? _C.red
               : dark
-              ? Colors.white
-              : color,
+                  ? Colors.white
+                  : color,
           fontWeight: FontWeight.w900,
           fontSize: 11,
         ),
@@ -2364,8 +2359,7 @@ class _PlanDialogState extends State<_PlanDialog> {
                             title: widget.title,
                             repeat: _selected,
                             note: note.isEmpty ? null : note,
-                            seriesId:
-                                widget.existing?.seriesId ??
+                            seriesId: widget.existing?.seriesId ??
                                 widget.newSeriesId(widget.title),
                           ),
                         );
