@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/home_page.dart';
 import '../services/auth_service.dart';
+import 'package:go_router/go_router.dart';
 
 enum _LoginMode { guest, existing }
 
@@ -31,14 +32,7 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   void _goHome() {
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => HomePage(
-          initialAddressCards: widget.initialAddressCards,
-        ),
-      ),
-    );
+    context.go('/');
   }
 
   Future<void> _loginExisting() async {
@@ -72,7 +66,6 @@ class _LoginPageState extends State<LoginPage> {
       body: Stack(
         children: [
           const _DarkBackground(),
-
           Row(
             children: [
               // Left sidebar - brand panel
@@ -111,17 +104,13 @@ class _LoginPageState extends State<LoginPage> {
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               const _RightHeader(),
-
                               const SizedBox(height: 14),
-
                               _ModeSwitch(
                                 mode: mode,
                                 accent: accent,
                                 onChanged: (m) => setState(() => mode = m),
                               ),
-
                               const SizedBox(height: 12),
-
                               AnimatedSwitcher(
                                 duration: const Duration(milliseconds: 220),
                                 switchInCurve: Curves.easeOutCubic,
@@ -159,9 +148,7 @@ class _LoginPageState extends State<LoginPage> {
                                         onContinue: _goHome,
                                       ),
                               ),
-
                               const SizedBox(height: 12),
-
                               Text(
                                 'Not: Mevcut kullanıcı hesapları uygulama geliştiricileri tarafından tanımlanır.',
                                 textAlign: TextAlign.center,
@@ -368,9 +355,7 @@ class _LeftBrandPanel extends StatelessWidget {
               ),
             ],
           ),
-
           const SizedBox(height: 22),
-
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -395,9 +380,7 @@ class _LeftBrandPanel extends StatelessWidget {
               ),
             ],
           ),
-
           const SizedBox(height: 18),
-
           Wrap(
             spacing: 10,
             runSpacing: 10,
@@ -407,9 +390,7 @@ class _LeftBrandPanel extends StatelessWidget {
               _Chip(icon: Icons.auto_awesome_rounded, text: 'Rota'),
             ],
           ),
-
           const SizedBox(height: 18),
-
           Text(
             'İpucu: Misafir modunda planlar cihazda tutulur.',
             style: TextStyle(
@@ -605,9 +586,8 @@ class _Choice extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bg = selected ? accent.withOpacity(0.10) : Colors.transparent;
-    final br = selected
-        ? accent.withOpacity(0.40)
-        : Colors.white.withOpacity(0.10);
+    final br =
+        selected ? accent.withOpacity(0.40) : Colors.white.withOpacity(0.10);
 
     return InkWell(
       borderRadius: BorderRadius.circular(14),

@@ -9,9 +9,15 @@ import 'screens/saved_routes_page.dart';
 import 'screens/excel_uploads_page.dart';
 import 'screens/help_page.dart';
 import 'screens/calendar_page.dart';
+import 'screens/login_page.dart';
 
 final GoRouter router = GoRouter(
+  initialLocation: '/login',
   routes: [
+    GoRoute(
+      path: '/login',
+      builder: (context, state) => const LoginPage(),
+    ),
     GoRoute(
       path: '/',
       builder: (context, state) => const HomePage(),

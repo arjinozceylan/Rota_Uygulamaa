@@ -2,8 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class AuthService {
-  static const String baseUrl = "http://localhost:3000";
-
+  static const String baseUrl = "https://route-backend-wkiy.onrender.com";
   static Future<String?> login(String username, String password) async {
     try {
       final response = await http.post(
