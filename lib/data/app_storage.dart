@@ -8,6 +8,10 @@ import '../models/calendar_event.dart';
 import '../models/vehicle_workspace.dart';
 import '../services/reports_page.dart';
 
+import 'package:http/http.dart' as http;
+
+import 'package:flutter/foundation.dart';
+
 /// Uygulamanın kalıcı depolama servisi.
 /// SharedPreferences kullanarak tüm verileri JSON olarak saklar.
 class AppStorage {
@@ -84,8 +88,9 @@ class AppStorage {
       // AddressStore'a yükle
       AddressStore.clear();
       final addresses = (data['addresses'] as List?)
-          ?.map((e) => Address.fromJson(e as Map<String, dynamic>))
-          .toList() ?? [];
+              ?.map((e) => Address.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          [];
       for (final a in addresses) {
         AddressStore.add(a);
       }
@@ -99,14 +104,47 @@ class AppStorage {
   // ── ROTALAR ───────────────────────────────────────────────────────────────
 
   Future<void> _saveRoutes(SharedPreferences prefs) async {
-    final records = RouteStore.instance.allRecords.map((r) => {
-      'createdAt': r.createdAt.toIso8601String(),
-      'totalMin': r.totalMin,
-      'totalKm': r.totalKm,
-      'path': r.path,
-      'vehicleId': r.vehicleId?.index,
-    }).toList();
+    final records = RouteStore.instance.allRecords
+        .map((r) => {
+              'createdAt': r.createdAt.toIso8601String(),
+              'totalMin': r.totalMin,
+              'totalKm': r.totalKm,
+              'path': r.path,
+              'vehicleId': r.vehicleId?.index,
+            })
+        .toList();
+
+    // Önce eski sistem gibi local'e kaydet
     await prefs.setString(_keyRoutes, jsonEncode(records));
+
+    // Son oluşturulan rotayı backend'e gönder
+    if (records.isNotEmpty) {
+      final lastRoute = records.last;
+      final userId = prefs.getInt("user_id") ?? 1;
+
+      try {
+        await http.post(
+          Uri.parse("https://route-backend-wkiy.onrender.com/routes"),
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: jsonEncode({
+            "user_id": userId,
+            "name": "Web Rota",
+            "route_json": {
+              "createdAt": lastRoute["createdAt"],
+              "totalMin": lastRoute["totalMin"],
+              "totalKm": lastRoute["totalKm"],
+              "path": lastRoute["path"],
+              "vehicleId": lastRoute["vehicleId"],
+            },
+          }),
+        );
+      } catch (e) {
+        // Backend'e gönderilemezse web uygulaması bozulmasın
+        debugPrint("Backend rota kaydetme hatası: $e");
+      }
+    }
   }
 
   List<RouteRecord> _loadRoutes(SharedPreferences prefs) {
@@ -138,11 +176,13 @@ class AppStorage {
   }
 
   Future<void> _saveUploads(SharedPreferences prefs) async {
-    final files = UploadedFilesStore.files.map((f) => {
-      'fileName': f.fileName,
-      'addressCount': f.addressCount,
-      'uploadedAt': f.uploadedAt.toIso8601String(),
-    }).toList();
+    final files = UploadedFilesStore.files
+        .map((f) => {
+              'fileName': f.fileName,
+              'addressCount': f.addressCount,
+              'uploadedAt': f.uploadedAt.toIso8601String(),
+            })
+        .toList();
     await prefs.setString(_keyUploads, jsonEncode(files));
   }
 
