@@ -353,12 +353,18 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  void _addAddressToPoolAndCards(Address addressObj) {
+  void _addAddressToPoolAndCards(Address addressObj, {bool prepend = true}) {
     final a = addressObj.address.trim();
     if (a.isEmpty) return;
     setState(() {
       AddressStore.add(addressObj);
-      if (!addressCards.contains(a)) addressCards.insert(0, a);
+      if (!addressCards.contains(a)) {
+        if (prepend) {
+          addressCards.insert(0, a);
+        } else {
+          addressCards.add(a);
+        }
+      }
     });
     _persist();
   }
@@ -534,16 +540,46 @@ class _HomePageState extends State<HomePage> {
       final commaCount = ','.allMatches(header).length;
       final semiCount = ';'.allMatches(header).length;
       final sep = semiCount > commaCount ? ';' : ',';
+      final headerCols = header.split(sep).map((c) => c.trim()).toList();
 
-      // Adresleri ayrı listede topla (header'ı filtrele)
+      // Adres sütununu başlığa göre bul. TC No, hasta adı-soyadı, irtibat,
+      // başvuru/ziyaret tarihi, uygunluk durumu gibi hassas sütunlar hiç
+      // okunmaz — yalnızca adres (ve varsa ilk sütundaki sıra no) işlenir.
+      var addressColIndex = headerCols.indexWhere(
+        (c) => c.toLowerCase() == 'adres',
+      );
+      int? sequenceColIndex;
+      if (addressColIndex == -1) {
+        addressColIndex = 0; // başlıkta "Adres" yoksa eski davranış: ilk sütun
+      } else if (addressColIndex != 0) {
+        sequenceColIndex = 0; // adres ayrı bir sütundaysa ilk sütun sıra no'dur
+      }
+
+      // Adres + sıra no'yu satır sırasıyla topla — bu sıra asla değiştirilmez.
       final addressesToProcess = <String>[];
-      for (final line in lines) {
+      final sequencesToProcess = <String?>[];
+      for (final line in lines.skip(1)) {
         final raw = line.trim();
         if (raw.isEmpty) continue;
-        final firstCol = raw.split(sep).first.trim();
-        if (firstCol.isEmpty) continue;
-        if (firstCol.toLowerCase() == 'adres') continue;
-        addressesToProcess.add(firstCol);
+        final cols = raw.split(sep);
+        String addressText;
+        if (addressColIndex == headerCols.length - 1 &&
+            cols.length > headerCols.length) {
+          // Adres metninin içinde ayraçla aynı karakter geçmiş olabilir
+          addressText = cols.sublist(addressColIndex).join(sep).trim();
+        } else if (addressColIndex < cols.length) {
+          addressText = cols[addressColIndex].trim();
+        } else {
+          continue;
+        }
+        if (addressText.isEmpty) continue;
+        addressesToProcess.add(addressText);
+        if (sequenceColIndex != null && sequenceColIndex < cols.length) {
+          final seq = cols[sequenceColIndex].trim();
+          sequencesToProcess.add(seq.isEmpty ? null : seq);
+        } else {
+          sequencesToProcess.add(null);
+        }
       }
 
       if (addressesToProcess.isEmpty) {
@@ -577,15 +613,19 @@ class _HomePageState extends State<HomePage> {
         ),
       );
 
-      // Her adres için geocoding yap
+      // Her adres için geocoding yap (sıra korunarak listenin sonuna eklenir)
       int added = 0;
-      for (final addressText in addressesToProcess) {
+      for (var i = 0; i < addressesToProcess.length; i++) {
         try {
-          final geocodedAddress = await _makeAndGeocodeManualAddress(
-            addressText,
+          var geocodedAddress = await _makeAndGeocodeManualAddress(
+            addressesToProcess[i],
           );
+          final seq = sequencesToProcess[i];
+          if (seq != null) {
+            geocodedAddress = geocodedAddress.copyWith(note: 'Sıra No: $seq');
+          }
           if (mounted) {
-            _addAddressToPoolAndCards(geocodedAddress);
+            _addAddressToPoolAndCards(geocodedAddress, prepend: false);
             added++;
           }
         } catch (e) {
