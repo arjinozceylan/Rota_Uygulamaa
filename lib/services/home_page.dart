@@ -502,6 +502,24 @@ class _HomePageState extends State<HomePage> {
     _persist();
   }
 
+  void _clearAllAddresses() {
+    setState(() {
+      addressCards.clear();
+      AddressStore.clear();
+    });
+    _persist();
+  }
+
+  // CSV hücreleri çift tırnakla sarmalanmış olabilir (ör. ayraç içeren metin);
+  // bu sarmalayıcı tırnakları kaldırır, kaçışlı çift tırnağı ("") tekile çevirir.
+  String _stripCsvQuotes(String value) {
+    var v = value.trim();
+    if (v.length >= 2 && v.startsWith('"') && v.endsWith('"')) {
+      v = v.substring(1, v.length - 1).replaceAll('""', '"');
+    }
+    return v.trim();
+  }
+
   // ── CSV import ────────────────────────────────────────────────────────────
   Future<void> _importAddressesFromExcel() async {
     try {
@@ -572,10 +590,11 @@ class _HomePageState extends State<HomePage> {
         } else {
           continue;
         }
+        addressText = _stripCsvQuotes(addressText);
         if (addressText.isEmpty) continue;
         addressesToProcess.add(addressText);
         if (sequenceColIndex != null && sequenceColIndex < cols.length) {
-          final seq = cols[sequenceColIndex].trim();
+          final seq = _stripCsvQuotes(cols[sequenceColIndex]);
           sequencesToProcess.add(seq.isEmpty ? null : seq);
         } else {
           sequencesToProcess.add(null);
@@ -622,7 +641,9 @@ class _HomePageState extends State<HomePage> {
           );
           final seq = sequencesToProcess[i];
           if (seq != null) {
-            geocodedAddress = geocodedAddress.copyWith(note: 'Sıra No: $seq');
+            geocodedAddress = geocodedAddress.copyWith(
+              address: '$seq - ${geocodedAddress.address}',
+            );
           }
           if (mounted) {
             _addAddressToPoolAndCards(geocodedAddress, prepend: false);
@@ -1018,7 +1039,7 @@ class _HomePageState extends State<HomePage> {
                   hasItems: dropped.isNotEmpty,
                   hasAddresses: addressCards.isNotEmpty,
                   onClear: _clearQueue,
-                  onClearAddresses: () => setState(() => addressCards.clear()),
+                  onClearAddresses: _clearAllAddresses,
                   onCreateRoute: _runDemoRoute,
                   droppedCount: dropped.length,
                 ),
@@ -1343,8 +1364,26 @@ class _SearchPanel extends StatelessWidget {
   final ValueChanged<String> onDropAddress;
   final ValueChanged<String> onRemoveCard;
 
+  // CSV'den içe aktarılan kartlar "{sıra no} - {adres}" formatındadır.
+  // Sayısal bir sorgu yalnızca sıra no'su tam eşleşen kartı bulur; metin
+  // sorgusu ise kartın tamamında (sıra no + adres) serbest arama yapar.
+  static bool _cardMatchesQuery(String cardText, String query) {
+    final q = query.trim();
+    if (q.isEmpty) return true;
+    if (RegExp(r'^\d+$').hasMatch(q)) {
+      return cardText.startsWith('$q -');
+    }
+    return cardText.toLowerCase().contains(q.toLowerCase());
+  }
+
   @override
   Widget build(BuildContext context) {
+    final cardQuery = mapMode ? searchCtrl.text : '';
+    final visibleCards = cardQuery.trim().isEmpty
+        ? addressCards
+        : addressCards
+              .where((c) => _cardMatchesQuery(c, cardQuery))
+              .toList();
     return Container(
       decoration: BoxDecoration(
         color: _T.surface,
@@ -1570,11 +1609,13 @@ class _SearchPanel extends StatelessWidget {
 
           // Adres kartları (sürüklenebilir)
           Expanded(
-            child: addressCards.isEmpty
-                ? const Center(
+            child: visibleCards.isEmpty
+                ? Center(
                     child: Text(
-                      'Henüz adres eklenmedi',
-                      style: TextStyle(
+                      addressCards.isEmpty
+                          ? 'Henüz adres eklenmedi'
+                          : 'Sonuç bulunamadı',
+                      style: const TextStyle(
                         color: _T.textLight,
                         fontWeight: FontWeight.w600,
                       ),
@@ -1585,9 +1626,9 @@ class _SearchPanel extends StatelessWidget {
                       horizontal: 16,
                       vertical: 6,
                     ),
-                    itemCount: addressCards.length,
+                    itemCount: visibleCards.length,
                     itemBuilder: (_, i) {
-                      final text = addressCards[i];
+                      final text = visibleCards[i];
                       final inQueue = dropped.contains(text);
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 10),
