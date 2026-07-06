@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -7,6 +8,10 @@ import '../data/uploaded_files_store.dart';
 import '../models/calendar_event.dart';
 import '../models/vehicle_workspace.dart';
 import '../services/reports_page.dart';
+
+import 'package:http/http.dart' as http;
+
+import 'package:flutter/foundation.dart';
 
 /// Uygulamanın kalıcı depolama servisi.
 /// SharedPreferences kullanarak tüm verileri JSON olarak saklar.
@@ -84,8 +89,9 @@ class AppStorage {
       // AddressStore'a yükle
       AddressStore.clear();
       final addresses = (data['addresses'] as List?)
-          ?.map((e) => Address.fromJson(e as Map<String, dynamic>))
-          .toList() ?? [];
+              ?.map((e) => Address.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          [];
       for (final a in addresses) {
         AddressStore.add(a);
       }
@@ -99,14 +105,68 @@ class AppStorage {
   // ── ROTALAR ───────────────────────────────────────────────────────────────
 
   Future<void> _saveRoutes(SharedPreferences prefs) async {
-    final records = RouteStore.instance.allRecords.map((r) => {
-      'createdAt': r.createdAt.toIso8601String(),
-      'totalMin': r.totalMin,
-      'totalKm': r.totalKm,
-      'path': r.path,
-      'vehicleId': r.vehicleId?.index,
-    }).toList();
+    // allRecords en yeniden en eskiye sıralı gelir (RouteStore.allRecords).
+    final allRecords = RouteStore.instance.allRecords;
+
+    final records = allRecords
+        .map((r) => {
+              'createdAt': r.createdAt.toIso8601String(),
+              'totalMin': r.totalMin,
+              'totalKm': r.totalKm,
+              'path': r.path,
+              'vehicleId': r.vehicleId?.index,
+            })
+        .toList();
+
+    // Önce eski sistem gibi local'e kaydet
     await prefs.setString(_keyRoutes, jsonEncode(records));
+
+    // En son oluşturulan rotayı backend'e gönder (koordinatlı duraklarla)
+    if (allRecords.isNotEmpty) {
+      final lastRoute = allRecords.first;
+      final userId = prefs.getInt("user_id") ?? 1;
+
+      final stops = lastRoute.stops ?? const <Address>[];
+      final stopsJson = stops
+          .asMap()
+          .entries
+          .map((entry) => {
+                'order': entry.key + 1,
+                'code': entry.value.code,
+                'address': entry.value.address,
+                'street': entry.value.address,
+                'customerName': entry.value.address,
+                'latitude': entry.value.lat,
+                'longitude': entry.value.lng,
+                'notes': entry.value.note,
+              })
+          .toList();
+
+      try {
+        await http.post(
+          Uri.parse("https://route-backend-wkiy.onrender.com/routes"),
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: jsonEncode({
+            "user_id": userId,
+            "vehicle_id": lastRoute.vehicleId?.index,
+            "name": "Web Rota",
+            "route_json": {
+              "createdAt": lastRoute.createdAt.toIso8601String(),
+              "totalMin": lastRoute.totalMin,
+              "totalKm": lastRoute.totalKm,
+              "path": lastRoute.path,
+              "stops": stopsJson,
+              "vehicleId": lastRoute.vehicleId?.index,
+            },
+          }),
+        );
+      } catch (e) {
+        // Backend'e gönderilemezse web uygulaması bozulmasın
+        debugPrint("Backend rota kaydetme hatası: $e");
+      }
+    }
   }
 
   List<RouteRecord> _loadRoutes(SharedPreferences prefs) {
@@ -138,11 +198,13 @@ class AppStorage {
   }
 
   Future<void> _saveUploads(SharedPreferences prefs) async {
-    final files = UploadedFilesStore.files.map((f) => {
-      'fileName': f.fileName,
-      'addressCount': f.addressCount,
-      'uploadedAt': f.uploadedAt.toIso8601String(),
-    }).toList();
+    final files = UploadedFilesStore.files
+        .map((f) => {
+              'fileName': f.fileName,
+              'addressCount': f.addressCount,
+              'uploadedAt': f.uploadedAt.toIso8601String(),
+            })
+        .toList();
     await prefs.setString(_keyUploads, jsonEncode(files));
   }
 
@@ -166,6 +228,8 @@ class AppStorage {
 
   // ── FLEET / ARAÇ STATE ────────────────────────────────────────────────────
 
+  Timer? _fleetPushTimer;
+
   Future<void> _saveFleet(
     SharedPreferences prefs,
     Map<VehicleId, VehicleWorkspace> fleet,
@@ -182,6 +246,23 @@ class AppStorage {
       };
     }
     await prefs.setString(_keyFleet, jsonEncode(data));
+
+    // Backend'e gönderimi 3sn debounce ederek art arda gelen aksiyonları
+    // (adres ekle/sil vb.) tek istekte topla.
+    final userId = prefs.getInt("user_id") ?? 1;
+    _fleetPushTimer?.cancel();
+    _fleetPushTimer = Timer(const Duration(seconds: 3), () async {
+      try {
+        await http.post(
+          Uri.parse("https://route-backend-wkiy.onrender.com/fleet/$userId"),
+          headers: {"Content-Type": "application/json"},
+          body: jsonEncode({"vehicles": data}),
+        );
+      } catch (e) {
+        // Backend'e gönderilemezse web uygulaması bozulmasın
+        debugPrint("Backend filo kaydetme hatası: $e");
+      }
+    });
   }
 
   Map<VehicleId, VehicleWorkspace> _loadFleet(SharedPreferences prefs) {

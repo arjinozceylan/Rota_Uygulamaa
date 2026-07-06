@@ -353,12 +353,18 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  void _addAddressToPoolAndCards(Address addressObj) {
+  void _addAddressToPoolAndCards(Address addressObj, {bool prepend = true}) {
     final a = addressObj.address.trim();
     if (a.isEmpty) return;
     setState(() {
       AddressStore.add(addressObj);
-      if (!addressCards.contains(a)) addressCards.insert(0, a);
+      if (!addressCards.contains(a)) {
+        if (prepend) {
+          addressCards.insert(0, a);
+        } else {
+          addressCards.add(a);
+        }
+      }
     });
     _persist();
   }
@@ -496,6 +502,24 @@ class _HomePageState extends State<HomePage> {
     _persist();
   }
 
+  void _clearAllAddresses() {
+    setState(() {
+      addressCards.clear();
+      AddressStore.clear();
+    });
+    _persist();
+  }
+
+  // CSV hücreleri çift tırnakla sarmalanmış olabilir (ör. ayraç içeren metin);
+  // bu sarmalayıcı tırnakları kaldırır, kaçışlı çift tırnağı ("") tekile çevirir.
+  String _stripCsvQuotes(String value) {
+    var v = value.trim();
+    if (v.length >= 2 && v.startsWith('"') && v.endsWith('"')) {
+      v = v.substring(1, v.length - 1).replaceAll('""', '"');
+    }
+    return v.trim();
+  }
+
   // ── CSV import ────────────────────────────────────────────────────────────
   Future<void> _importAddressesFromExcel() async {
     try {
@@ -534,16 +558,47 @@ class _HomePageState extends State<HomePage> {
       final commaCount = ','.allMatches(header).length;
       final semiCount = ';'.allMatches(header).length;
       final sep = semiCount > commaCount ? ';' : ',';
+      final headerCols = header.split(sep).map((c) => c.trim()).toList();
 
-      // Adresleri ayrı listede topla (header'ı filtrele)
+      // Adres sütununu başlığa göre bul. TC No, hasta adı-soyadı, irtibat,
+      // başvuru/ziyaret tarihi, uygunluk durumu gibi hassas sütunlar hiç
+      // okunmaz — yalnızca adres (ve varsa ilk sütundaki sıra no) işlenir.
+      var addressColIndex = headerCols.indexWhere(
+        (c) => c.toLowerCase() == 'adres',
+      );
+      int? sequenceColIndex;
+      if (addressColIndex == -1) {
+        addressColIndex = 0; // başlıkta "Adres" yoksa eski davranış: ilk sütun
+      } else if (addressColIndex != 0) {
+        sequenceColIndex = 0; // adres ayrı bir sütundaysa ilk sütun sıra no'dur
+      }
+
+      // Adres + sıra no'yu satır sırasıyla topla — bu sıra asla değiştirilmez.
       final addressesToProcess = <String>[];
-      for (final line in lines) {
+      final sequencesToProcess = <String?>[];
+      for (final line in lines.skip(1)) {
         final raw = line.trim();
         if (raw.isEmpty) continue;
-        final firstCol = raw.split(sep).first.trim();
-        if (firstCol.isEmpty) continue;
-        if (firstCol.toLowerCase() == 'adres') continue;
-        addressesToProcess.add(firstCol);
+        final cols = raw.split(sep);
+        String addressText;
+        if (addressColIndex == headerCols.length - 1 &&
+            cols.length > headerCols.length) {
+          // Adres metninin içinde ayraçla aynı karakter geçmiş olabilir
+          addressText = cols.sublist(addressColIndex).join(sep).trim();
+        } else if (addressColIndex < cols.length) {
+          addressText = cols[addressColIndex].trim();
+        } else {
+          continue;
+        }
+        addressText = _stripCsvQuotes(addressText);
+        if (addressText.isEmpty) continue;
+        addressesToProcess.add(addressText);
+        if (sequenceColIndex != null && sequenceColIndex < cols.length) {
+          final seq = _stripCsvQuotes(cols[sequenceColIndex]);
+          sequencesToProcess.add(seq.isEmpty ? null : seq);
+        } else {
+          sequencesToProcess.add(null);
+        }
       }
 
       if (addressesToProcess.isEmpty) {
@@ -577,15 +632,21 @@ class _HomePageState extends State<HomePage> {
         ),
       );
 
-      // Her adres için geocoding yap
+      // Her adres için geocoding yap (sıra korunarak listenin sonuna eklenir)
       int added = 0;
-      for (final addressText in addressesToProcess) {
+      for (var i = 0; i < addressesToProcess.length; i++) {
         try {
-          final geocodedAddress = await _makeAndGeocodeManualAddress(
-            addressText,
+          var geocodedAddress = await _makeAndGeocodeManualAddress(
+            addressesToProcess[i],
           );
+          final seq = sequencesToProcess[i];
+          if (seq != null) {
+            geocodedAddress = geocodedAddress.copyWith(
+              address: '$seq - ${geocodedAddress.address}',
+            );
+          }
           if (mounted) {
-            _addAddressToPoolAndCards(geocodedAddress);
+            _addAddressToPoolAndCards(geocodedAddress, prepend: false);
             added++;
           }
         } catch (e) {
@@ -711,7 +772,8 @@ class _HomePageState extends State<HomePage> {
 
       final totalMin = (tspResult.totalCost / 60.0).round();
       final totalKm = _tourCostIdxKm(matrix, routeIdx);
-      final path = routeIdx.map((i) => nodes[i].address).toList();
+      final stops = routeIdx.map((i) => nodes[i]).toList();
+      final path = stops.map((a) => a.address).toList();
       if (!mounted) return;
       Navigator.pop(context);
 
@@ -723,6 +785,7 @@ class _HomePageState extends State<HomePage> {
           totalKm: totalKm,
           path: path,
           vehicleId: _fleetState.activeVehicle,
+          stops: stops,
         ),
       );
       AppStorage.instance.saveRoutes();
@@ -979,7 +1042,7 @@ class _HomePageState extends State<HomePage> {
                   hasItems: dropped.isNotEmpty,
                   hasAddresses: addressCards.isNotEmpty,
                   onClear: _clearQueue,
-                  onClearAddresses: () => setState(() => addressCards.clear()),
+                  onClearAddresses: _clearAllAddresses,
                   onCreateRoute: _runDemoRoute,
                   droppedCount: dropped.length,
                 ),
@@ -1304,8 +1367,26 @@ class _SearchPanel extends StatelessWidget {
   final ValueChanged<String> onDropAddress;
   final ValueChanged<String> onRemoveCard;
 
+  // CSV'den içe aktarılan kartlar "{sıra no} - {adres}" formatındadır.
+  // Sayısal bir sorgu yalnızca sıra no'su tam eşleşen kartı bulur; metin
+  // sorgusu ise kartın tamamında (sıra no + adres) serbest arama yapar.
+  static bool _cardMatchesQuery(String cardText, String query) {
+    final q = query.trim();
+    if (q.isEmpty) return true;
+    if (RegExp(r'^\d+$').hasMatch(q)) {
+      return cardText.startsWith('$q -');
+    }
+    return cardText.toLowerCase().contains(q.toLowerCase());
+  }
+
   @override
   Widget build(BuildContext context) {
+    final cardQuery = mapMode ? searchCtrl.text : '';
+    final visibleCards = cardQuery.trim().isEmpty
+        ? addressCards
+        : addressCards
+              .where((c) => _cardMatchesQuery(c, cardQuery))
+              .toList();
     return Container(
       decoration: BoxDecoration(
         color: _T.surface,
@@ -1531,11 +1612,13 @@ class _SearchPanel extends StatelessWidget {
 
           // Adres kartları (sürüklenebilir)
           Expanded(
-            child: addressCards.isEmpty
-                ? const Center(
+            child: visibleCards.isEmpty
+                ? Center(
                     child: Text(
-                      'Henüz adres eklenmedi',
-                      style: TextStyle(
+                      addressCards.isEmpty
+                          ? 'Henüz adres eklenmedi'
+                          : 'Sonuç bulunamadı',
+                      style: const TextStyle(
                         color: _T.textLight,
                         fontWeight: FontWeight.w600,
                       ),
@@ -1546,9 +1629,9 @@ class _SearchPanel extends StatelessWidget {
                       horizontal: 16,
                       vertical: 6,
                     ),
-                    itemCount: addressCards.length,
+                    itemCount: visibleCards.length,
                     itemBuilder: (_, i) {
-                      final text = addressCards[i];
+                      final text = visibleCards[i];
                       final inQueue = dropped.contains(text);
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 10),

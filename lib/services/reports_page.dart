@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../core/models/address.dart';
 import '../models/vehicle_workspace.dart';
 import '../services/fleet_state.dart';
 
@@ -16,12 +17,17 @@ class RouteRecord {
   final List<String> path; // sıralı adres listesi
   final VehicleId? vehicleId;
 
+  /// Koordinat dahil sıralı duraklar (mobil senkronizasyonu için).
+  /// `path` ile aynı sırada ama tam Address bilgisini (lat/lng) taşır.
+  final List<Address>? stops;
+
   const RouteRecord({
     required this.createdAt,
     required this.totalMin,
     required this.totalKm,
     required this.path,
     this.vehicleId,
+    this.stops,
   });
 
   int get stopCount => path.length - 1;

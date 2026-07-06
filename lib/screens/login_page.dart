@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import 'package:go_router/go_router.dart';
+import '../services/auth_service.dart';
 
 enum _LoginMode { guest, existing }
 
@@ -36,7 +37,7 @@ class _LoginPageState extends State<LoginPage> {
 
   Future<void> _loginExisting() async {
     final username = usernameCtrl.text.trim();
-    final password = passwordCtrl.text;
+    final password = passwordCtrl.text.trim();
 
     if (username.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -45,16 +46,23 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
 
-    setState(() => isSubmitting = true);
+    setState(() {
+      isSubmitting = true;
+    });
 
-    final errorMessage = await AuthService.login(username, password);
-    setState(() => isSubmitting = false);
+    final error = await AuthService.login(username, password);
 
-    if (errorMessage == null) {
+    if (!mounted) return;
+
+    setState(() {
+      isSubmitting = false;
+    });
+
+    if (error == null) {
       _goHome();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(errorMessage), backgroundColor: Colors.red),
+        SnackBar(content: Text(error)),
       );
     }
   }
