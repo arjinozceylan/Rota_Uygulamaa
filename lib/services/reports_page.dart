@@ -1053,10 +1053,11 @@ class _MorningAfternoonSummary extends StatelessWidget {
   Widget build(BuildContext context) {
     int morning = 0, afternoon = 0;
     for (final r in records) {
-      if (r.createdAt.hour < 12)
+      if (r.createdAt.hour < 12) {
         morning++;
-      else
+      } else {
         afternoon++;
+      }
     }
     final total = morning + afternoon;
     final mRatio = total == 0 ? 0.5 : morning / total;

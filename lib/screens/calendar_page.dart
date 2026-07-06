@@ -753,10 +753,12 @@ class _CalendarPageState extends State<CalendarPage>
                       fixedHomeAddress: _fixedHomeAddress,
                       onTapHeader: () => setState(() => selectedDay = dayKey),
                       onAcceptDrop: (data, shift) {
-                        if (data is Address)
+                        if (data is Address) {
                           _handleDropAddress(data, dayKey, shift);
-                        if (data is _MovePayload)
+                        }
+                        if (data is _MovePayload) {
                           setState(() => _moveItemToDay(data, dayKey, shift));
+                        }
                       },
                       onEditItem: (shift, idx) => _editItem(dayKey, shift, idx),
                       onReorder: (shift, o, n) =>
