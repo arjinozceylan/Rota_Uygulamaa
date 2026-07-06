@@ -1,3 +1,5 @@
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
@@ -726,6 +728,39 @@ class _HomePageState extends State<HomePage> {
         ),
       );
       AppStorage.instance.saveRoutes();
+
+      // ── Backend'e gönder (mobil ile senkron olması için) ──────────────
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final userId = prefs.getInt('user_id');
+        if (userId != null) {
+          final orderedNodes = routeIdx.map((i) => nodes[i]).toList();
+          final stops = List.generate(orderedNodes.length, (i) {
+            final a = orderedNodes[i];
+            return {
+              'id': i + 1,
+              'order': i + 1,
+              'address': a.address,
+              'latitude': a.lat,
+              'longitude': a.lng,
+              'customerName': i == 0 ? 'Başlangıç/Ev' : 'Durak $i',
+              'customerType': 'visit',
+              'completed': false,
+            };
+          });
+          await http.post(
+            Uri.parse('https://route-backend-jeu7.onrender.com/routes'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'user_id': userId,
+              'name': 'Rota Desktop Rota',
+              'route_json': {'stops': stops},
+            }),
+          );
+        }
+      } catch (e) {
+        // Backend'e gönderilemedi, yerel kayıt zaten yapıldığı için sessiz geç
+      }
       setState(() {
         _summaryTransferCount = path.length - 1;
         _summaryTotalMin = totalMin;
@@ -823,8 +858,9 @@ class _HomePageState extends State<HomePage> {
                     .then(
                       (_) => setState(() {
                         for (final a in AddressStore.items) {
-                          if (!addressCards.contains(a.address))
+                          if (!addressCards.contains(a.address)) {
                             addressCards.insert(0, a.address);
+                          }
                         }
                       }),
                     );
@@ -987,6 +1023,12 @@ class _HomePageState extends State<HomePage> {
           ),
         ],
       ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => context.go('/login'),
+        icon: const Icon(Icons.logout_rounded),
+        label: const Text('Çıkış Yap'),
+        backgroundColor: const Color(0xFF53D6FF),
+      ),
     );
   }
 }
@@ -1095,7 +1137,7 @@ class _Sidebar extends StatelessWidget {
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          Container(
+                          SizedBox(
                             width: 7,
                             height: 7,
                           ),
@@ -2091,8 +2133,8 @@ class _QueuePanel extends StatelessWidget {
           ),
           Expanded(
             child: DragTarget<String>(
-              onWillAccept: (_) => true,
-              onAccept: onAcceptDrop,
+              onWillAcceptWithDetails: (_) => true,
+              onAcceptWithDetails: (details) => onAcceptDrop(details.data),
               builder: (context, candidateData, rejectedData) {
                 final isDraggingOver = candidateData.isNotEmpty;
                 if (dropped.isEmpty) {
@@ -3410,7 +3452,7 @@ class _RouteResultDialog extends StatelessWidget {
                                               ? 'BAŞLANGIÇ'
                                               : isEnd
                                                   ? 'BİTİŞ'
-                                                  : 'DURAK ${i}',
+                                                  : 'DURAK $i',
                                           style: TextStyle(
                                             color: dotColor,
                                             fontSize: 9,

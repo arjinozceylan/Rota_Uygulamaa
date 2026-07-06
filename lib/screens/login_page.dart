@@ -1,3 +1,4 @@
+import 'package:go_router/go_router.dart';
 import 'package:flutter/material.dart';
 import '../services/home_page.dart';
 import '../services/auth_service.dart';
@@ -31,14 +32,13 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   void _goHome() {
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => HomePage(
-          initialAddressCards: widget.initialAddressCards,
-        ),
-      ),
-    );
+    context.go('/');
+  
+  }
+
+  Future<void> _continueAsGuest() async {
+    await AuthService.continueAsGuest();
+    _goHome();
   }
 
   Future<void> _loginExisting() async {
@@ -156,7 +156,7 @@ class _LoginPageState extends State<LoginPage> {
                                     : _GuestBlock(
                                         key: const ValueKey('guestBlock'),
                                         accent: accent,
-                                        onContinue: _goHome,
+                                        onContinue: _continueAsGuest,
                                       ),
                               ),
 
