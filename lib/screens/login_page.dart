@@ -1,6 +1,5 @@
 import 'package:go_router/go_router.dart';
 import 'package:flutter/material.dart';
-import '../services/home_page.dart';
 import '../services/auth_service.dart';
 
 enum _LoginMode { guest, existing }
@@ -33,7 +32,6 @@ class _LoginPageState extends State<LoginPage> {
 
   void _goHome() {
     context.go('/');
-  
   }
 
   Future<void> _continueAsGuest() async {
@@ -43,7 +41,7 @@ class _LoginPageState extends State<LoginPage> {
 
   Future<void> _loginExisting() async {
     final username = usernameCtrl.text.trim();
-    final password = passwordCtrl.text;
+    final password = passwordCtrl.text.trim();
 
     if (username.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -52,16 +50,23 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
 
-    setState(() => isSubmitting = true);
+    setState(() {
+      isSubmitting = true;
+    });
 
-    final errorMessage = await AuthService.login(username, password);
-    setState(() => isSubmitting = false);
+    final error = await AuthService.login(username, password);
 
-    if (errorMessage == null) {
+    if (!mounted) return;
+
+    setState(() {
+      isSubmitting = false;
+    });
+
+    if (error == null) {
       _goHome();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(errorMessage), backgroundColor: Colors.red),
+        SnackBar(content: Text(error)),
       );
     }
   }
@@ -72,7 +77,6 @@ class _LoginPageState extends State<LoginPage> {
       body: Stack(
         children: [
           const _DarkBackground(),
-
           Row(
             children: [
               // Left sidebar - brand panel
@@ -111,17 +115,13 @@ class _LoginPageState extends State<LoginPage> {
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               const _RightHeader(),
-
                               const SizedBox(height: 14),
-
                               _ModeSwitch(
                                 mode: mode,
                                 accent: accent,
                                 onChanged: (m) => setState(() => mode = m),
                               ),
-
                               const SizedBox(height: 12),
-
                               AnimatedSwitcher(
                                 duration: const Duration(milliseconds: 220),
                                 switchInCurve: Curves.easeOutCubic,
@@ -159,9 +159,7 @@ class _LoginPageState extends State<LoginPage> {
                                         onContinue: _continueAsGuest,
                                       ),
                               ),
-
                               const SizedBox(height: 12),
-
                               Text(
                                 'Not: Mevcut kullanıcı hesapları uygulama geliştiricileri tarafından tanımlanır.',
                                 textAlign: TextAlign.center,
@@ -368,9 +366,7 @@ class _LeftBrandPanel extends StatelessWidget {
               ),
             ],
           ),
-
           const SizedBox(height: 22),
-
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -395,9 +391,7 @@ class _LeftBrandPanel extends StatelessWidget {
               ),
             ],
           ),
-
           const SizedBox(height: 18),
-
           Wrap(
             spacing: 10,
             runSpacing: 10,
@@ -407,9 +401,7 @@ class _LeftBrandPanel extends StatelessWidget {
               _Chip(icon: Icons.auto_awesome_rounded, text: 'Rota'),
             ],
           ),
-
           const SizedBox(height: 18),
-
           Text(
             'İpucu: Misafir modunda planlar cihazda tutulur.',
             style: TextStyle(
@@ -605,9 +597,8 @@ class _Choice extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bg = selected ? accent.withOpacity(0.10) : Colors.transparent;
-    final br = selected
-        ? accent.withOpacity(0.40)
-        : Colors.white.withOpacity(0.10);
+    final br =
+        selected ? accent.withOpacity(0.40) : Colors.white.withOpacity(0.10);
 
     return InkWell(
       borderRadius: BorderRadius.circular(14),
