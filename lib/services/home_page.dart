@@ -823,8 +823,9 @@ class _HomePageState extends State<HomePage> {
                     .then(
                       (_) => setState(() {
                         for (final a in AddressStore.items) {
-                          if (!addressCards.contains(a.address))
+                          if (!addressCards.contains(a.address)) {
                             addressCards.insert(0, a.address);
+                          }
                         }
                       }),
                     );
@@ -1095,7 +1096,7 @@ class _Sidebar extends StatelessWidget {
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          Container(
+                          SizedBox(
                             width: 7,
                             height: 7,
                           ),
@@ -2091,8 +2092,8 @@ class _QueuePanel extends StatelessWidget {
           ),
           Expanded(
             child: DragTarget<String>(
-              onWillAccept: (_) => true,
-              onAccept: onAcceptDrop,
+              onWillAcceptWithDetails: (_) => true,
+              onAcceptWithDetails: onAcceptDrop,
               builder: (context, candidateData, rejectedData) {
                 final isDraggingOver = candidateData.isNotEmpty;
                 if (dropped.isEmpty) {
@@ -3410,7 +3411,7 @@ class _RouteResultDialog extends StatelessWidget {
                                               ? 'BAŞLANGIÇ'
                                               : isEnd
                                                   ? 'BİTİŞ'
-                                                  : 'DURAK ${i}',
+                                                  : 'DURAK $i',
                                           style: TextStyle(
                                             color: dotColor,
                                             fontSize: 9,
