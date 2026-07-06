@@ -772,7 +772,8 @@ class _HomePageState extends State<HomePage> {
 
       final totalMin = (tspResult.totalCost / 60.0).round();
       final totalKm = _tourCostIdxKm(matrix, routeIdx);
-      final path = routeIdx.map((i) => nodes[i].address).toList();
+      final stops = routeIdx.map((i) => nodes[i]).toList();
+      final path = stops.map((a) => a.address).toList();
       if (!mounted) return;
       Navigator.pop(context);
 
@@ -784,6 +785,7 @@ class _HomePageState extends State<HomePage> {
           totalKm: totalKm,
           path: path,
           vehicleId: _fleetState.activeVehicle,
+          stops: stops,
         ),
       );
       AppStorage.instance.saveRoutes();

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -104,7 +105,10 @@ class AppStorage {
   // ── ROTALAR ───────────────────────────────────────────────────────────────
 
   Future<void> _saveRoutes(SharedPreferences prefs) async {
-    final records = RouteStore.instance.allRecords
+    // allRecords en yeniden en eskiye sıralı gelir (RouteStore.allRecords).
+    final allRecords = RouteStore.instance.allRecords;
+
+    final records = allRecords
         .map((r) => {
               'createdAt': r.createdAt.toIso8601String(),
               'totalMin': r.totalMin,
@@ -117,10 +121,26 @@ class AppStorage {
     // Önce eski sistem gibi local'e kaydet
     await prefs.setString(_keyRoutes, jsonEncode(records));
 
-    // Son oluşturulan rotayı backend'e gönder
-    if (records.isNotEmpty) {
-      final lastRoute = records.last;
+    // En son oluşturulan rotayı backend'e gönder (koordinatlı duraklarla)
+    if (allRecords.isNotEmpty) {
+      final lastRoute = allRecords.first;
       final userId = prefs.getInt("user_id") ?? 1;
+
+      final stops = lastRoute.stops ?? const <Address>[];
+      final stopsJson = stops
+          .asMap()
+          .entries
+          .map((entry) => {
+                'order': entry.key + 1,
+                'code': entry.value.code,
+                'address': entry.value.address,
+                'street': entry.value.address,
+                'customerName': entry.value.address,
+                'latitude': entry.value.lat,
+                'longitude': entry.value.lng,
+                'notes': entry.value.note,
+              })
+          .toList();
 
       try {
         await http.post(
@@ -130,13 +150,15 @@ class AppStorage {
           },
           body: jsonEncode({
             "user_id": userId,
+            "vehicle_id": lastRoute.vehicleId?.index,
             "name": "Web Rota",
             "route_json": {
-              "createdAt": lastRoute["createdAt"],
-              "totalMin": lastRoute["totalMin"],
-              "totalKm": lastRoute["totalKm"],
-              "path": lastRoute["path"],
-              "vehicleId": lastRoute["vehicleId"],
+              "createdAt": lastRoute.createdAt.toIso8601String(),
+              "totalMin": lastRoute.totalMin,
+              "totalKm": lastRoute.totalKm,
+              "path": lastRoute.path,
+              "stops": stopsJson,
+              "vehicleId": lastRoute.vehicleId?.index,
             },
           }),
         );
@@ -206,6 +228,8 @@ class AppStorage {
 
   // ── FLEET / ARAÇ STATE ────────────────────────────────────────────────────
 
+  Timer? _fleetPushTimer;
+
   Future<void> _saveFleet(
     SharedPreferences prefs,
     Map<VehicleId, VehicleWorkspace> fleet,
@@ -222,6 +246,23 @@ class AppStorage {
       };
     }
     await prefs.setString(_keyFleet, jsonEncode(data));
+
+    // Backend'e gönderimi 3sn debounce ederek art arda gelen aksiyonları
+    // (adres ekle/sil vb.) tek istekte topla.
+    final userId = prefs.getInt("user_id") ?? 1;
+    _fleetPushTimer?.cancel();
+    _fleetPushTimer = Timer(const Duration(seconds: 3), () async {
+      try {
+        await http.post(
+          Uri.parse("https://route-backend-wkiy.onrender.com/fleet/$userId"),
+          headers: {"Content-Type": "application/json"},
+          body: jsonEncode({"vehicles": data}),
+        );
+      } catch (e) {
+        // Backend'e gönderilemezse web uygulaması bozulmasın
+        debugPrint("Backend filo kaydetme hatası: $e");
+      }
+    });
   }
 
   Map<VehicleId, VehicleWorkspace> _loadFleet(SharedPreferences prefs) {
