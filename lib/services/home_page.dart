@@ -816,7 +816,7 @@ class _HomePageState extends State<HomePage> {
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({
               'user_id': userId,
-              'name': 'Rota Desktop Rota',
+              'name': 'Rota360 Rota',
               'route_json': {'stops': stops},
             }),
           );
@@ -1138,18 +1138,18 @@ class _Sidebar extends StatelessWidget {
                   ),
                   child: const Center(
                     child: Text(
-                      'RD',
+                      'R360',
                       style: TextStyle(
                         color: _T.accent,
                         fontWeight: FontWeight.w900,
-                        fontSize: 15,
+                        fontSize: 12,
                       ),
                     ),
                   ),
                 ),
                 const SizedBox(width: 10),
                 const Text(
-                  'rota_desktop',
+                  'Rota360',
                   style: TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w800,
@@ -1425,9 +1425,7 @@ class _SearchPanel extends StatelessWidget {
     final cardQuery = mapMode ? searchCtrl.text : '';
     final visibleCards = cardQuery.trim().isEmpty
         ? addressCards
-        : addressCards
-              .where((c) => _cardMatchesQuery(c, cardQuery))
-              .toList();
+        : addressCards.where((c) => _cardMatchesQuery(c, cardQuery)).toList();
     return Container(
       decoration: BoxDecoration(
         color: _T.surface,

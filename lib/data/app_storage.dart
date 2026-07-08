@@ -144,7 +144,7 @@ class AppStorage {
 
       try {
         await http.post(
-          Uri.parse("https://route-backend-wkiy.onrender.com/routes"),
+          Uri.parse("https://route-backend-jeu7.onrender.com/routes"),
           headers: {
             "Content-Type": "application/json",
           },
@@ -254,7 +254,7 @@ class AppStorage {
     _fleetPushTimer = Timer(const Duration(seconds: 3), () async {
       try {
         await http.post(
-          Uri.parse("https://route-backend-wkiy.onrender.com/fleet/$userId"),
+          Uri.parse("https://route-backend-jeu7.onrender.com/fleet/$userId"),
           headers: {"Content-Type": "application/json"},
           body: jsonEncode({"vehicles": data}),
         );
