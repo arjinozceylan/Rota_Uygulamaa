@@ -347,7 +347,7 @@ class _LeftBrandPanel extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Rota Desktop',
+                    'Rota360',
                     style: TextStyle(
                       fontSize: 16.5,
                       fontWeight: FontWeight.w800,

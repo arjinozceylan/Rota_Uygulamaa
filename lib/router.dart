@@ -1,6 +1,6 @@
 import 'package:go_router/go_router.dart';
-import 'package:rota_desktop/core/models/address.dart';
-import 'package:rota_desktop/screens/map_picker_page.dart';
+import 'package:rota360/core/models/address.dart';
+import 'package:rota360/screens/map_picker_page.dart';
 import 'services/home_page.dart';
 import 'services/reports_page.dart';
 import 'screens/saved_routes_page.dart';

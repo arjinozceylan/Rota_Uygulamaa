@@ -25,3 +25,5 @@ linux/flutter/ephemeral/
 # IDE
 .idea/
 .vscode/
+/lib.zip
+/lib/macos/

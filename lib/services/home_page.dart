@@ -790,40 +790,9 @@ class _HomePageState extends State<HomePage> {
           stops: stops,
         ),
       );
+
       AppStorage.instance.saveRoutes();
 
-      // ── Backend'e gönder (mobil ile senkron olması için) ──────────────
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        final userId = prefs.getInt('user_id');
-        if (userId != null) {
-          final orderedNodes = routeIdx.map((i) => nodes[i]).toList();
-          final stops = List.generate(orderedNodes.length, (i) {
-            final a = orderedNodes[i];
-            return {
-              'id': i + 1,
-              'order': i + 1,
-              'address': a.address,
-              'latitude': a.lat,
-              'longitude': a.lng,
-              'customerName': i == 0 ? 'Başlangıç/Ev' : 'Durak $i',
-              'customerType': 'visit',
-              'completed': false,
-            };
-          });
-          await http.post(
-            Uri.parse('https://route-backend-jeu7.onrender.com/routes'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({
-              'user_id': userId,
-              'name': 'Rota360 Rota',
-              'route_json': {'stops': stops},
-            }),
-          );
-        }
-      } catch (e) {
-        // Backend'e gönderilemedi, yerel kayıt zaten yapıldığı için sessiz geç
-      }
       setState(() {
         _summaryTransferCount = path.length - 1;
         _summaryTotalMin = totalMin;
