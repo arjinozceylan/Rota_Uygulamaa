@@ -8,6 +8,7 @@ import 'screens/excel_uploads_page.dart';
 import 'screens/help_page.dart';
 import 'screens/calendar_page.dart';
 import 'screens/login_page.dart';
+import 'screens/forgot_password_page.dart';
 
 final GoRouter router = GoRouter(
   initialLocation: '/login',
@@ -15,6 +16,10 @@ final GoRouter router = GoRouter(
     GoRoute(
       path: '/login',
       builder: (context, state) => const LoginPage(),
+    ),
+    GoRoute(
+      path: '/forgot-password',
+      builder: (context, state) => const ForgotPasswordPage(),
     ),
     GoRoute(
       path: '/',
