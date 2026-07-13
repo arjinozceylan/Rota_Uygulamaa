@@ -14,6 +14,7 @@ import '../data/address_store.dart';
 import '../data/app_storage.dart';
 import '../data/uploaded_files_store.dart';
 import '../screens/excel_uploads_page.dart';
+import '../widgets/vehicle_driver_assignment.dart';
 import '../models/calendar_event.dart';
 import '../models/vehicle_workspace.dart';
 import 'fleet_state.dart';
@@ -1029,14 +1030,9 @@ class _HomePageState extends State<HomePage> {
                               fontSize: 15,
                             ),
                           ),
-                          const SizedBox(height: 4),
-                          const Text(
-                            'Aktif araç çalışma alanı',
-                            style: TextStyle(
-                              color: _T.textLight,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 11,
-                            ),
+                        const SizedBox(height: 6),
+                          VehicleDriverAssignment(
+                            vehicleId: _fleetState.activeVehicle,
                           ),
                         ],
                       ),
