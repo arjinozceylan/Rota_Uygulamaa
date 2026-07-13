@@ -37,7 +37,7 @@ class _VehicleDriverAssignmentState extends State<VehicleDriverAssignment> {
     }
   }
 
-  int get _vehicleNumber => widget.vehicleId.index + 1;
+ int get _vehicleNumber => widget.vehicleId.index;
 
   Future<void> _load() async {
     setState(() => _loading = true);
