@@ -26,6 +26,8 @@ import '../screens/saved_routes_page.dart';
 import '../widgets/vehicle_selector_bar.dart';
 import 'tsp_optimizer_service.dart';
 import '../screens/help_page.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart' as ll;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TOKENS
@@ -353,6 +355,101 @@ class _HomePageState extends State<HomePage> {
       lat: null,
       lng: null,
     );
+  }
+
+  Future<bool> _confirmAddressOnMap(Address addr) async {
+    if (addr.lat == null || addr.lng == null) {
+      // Koordinatsız adresler için harita gösterilemez, direkt onay sorulur.
+      return await showDialog<bool>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text('Adresi onayla'),
+              content: Text(
+                '${addr.address}\n\nBu adres için konum bilgisi bulunamadı, yine de eklemek ister misiniz?',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('İptal'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Ekle'),
+                ),
+              ],
+            ),
+          ) ??
+          false;
+    }
+
+    final point = ll.LatLng(addr.lat!, addr.lng!);
+    return await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            insetPadding: const EdgeInsets.all(20),
+            title: const Text('Bu konumu onaylıyor musunuz?'),
+            content: SizedBox(
+              width: 420,
+              height: 340,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    addr.address,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 10),
+                  Expanded(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: FlutterMap(
+                        options: MapOptions(
+                          initialCenter: point,
+                          initialZoom: 15,
+                          interactionOptions: const InteractionOptions(
+                            flags: InteractiveFlag.pinchZoom | InteractiveFlag.drag,
+                          ),
+                        ),
+                        children: [
+                          TileLayer(
+                            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                            userAgentPackageName: 'com.rota360.rota_uygulamaa',
+                          ),
+                          MarkerLayer(
+                            markers: [
+                              Marker(
+                                point: point,
+                                width: 44,
+                                height: 44,
+                                child: const Icon(
+                                  Icons.location_pin,
+                                  size: 44,
+                                  color: Colors.red,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('İptal'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Bu Konumu Ekle'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
   }
 
   void _addAddressToPoolAndCards(Address addressObj, {bool prepend = true}) {
@@ -1001,7 +1098,10 @@ class _HomePageState extends State<HomePage> {
                               setState(() => _showHistory = false);
                               _onSearchChanged();
                             },
-                            onAddSuggestion: (addr) {
+                            onAddSuggestion: (addr) async {
+                              final confirmed = await _confirmAddressOnMap(addr);
+                              if (!confirmed) return;
+                              if (!mounted) return;
                               _addAddressToPoolAndCards(addr);
                               _dropAddress(addr.address);
                               setState(() {
