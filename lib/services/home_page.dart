@@ -866,7 +866,7 @@ class _HomePageState extends State<HomePage> {
               CircularProgressIndicator(),
               SizedBox(width: 16),
               Expanded(
-                child: Text('Gerçek süre/mesafe hesaplanıyor (OSRM)...'),
+                child: Text('Gerçek süre/mesafe hesaplanıyor (Google Trafik)...'),
               ),
             ],
           ),
@@ -875,27 +875,40 @@ class _HomePageState extends State<HomePage> {
     );
 
     try {
-      final matrix = await _osrm.table(
-        coords:
-            nodes.map((a) => LatLng(a.lat!, a.lng!)).toList(growable: false),
-      );
-
-      // OSRM duration matrix -> plain square cost matrix
-      final cost = List<List<double>>.generate(
-        matrix.n,
-        (i) => List<double>.generate(matrix.n, (j) {
-          final v = matrix.durationsSeconds[i][j];
-          if (v == null) return 1e15;
-          return v;
+      // Backend'de Google Distance Matrix (trafik dahil) + exact TSP
+      // (Held-Karp) ile optimize ediyoruz — mobil ile aynı endpoint,
+      // aynı algoritma, aynı veri kaynağı (tutarlılık için).
+      final stopsForRequest = nodes.sublist(1);
+      final response = await http.post(
+        Uri.parse('https://route-backend-jeu7.onrender.com/routes/optimize'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'origin': {'latitude': home.lat, 'longitude': home.lng},
+          'stops': stopsForRequest
+              .map((a) => {
+                    'id': stopsForRequest.indexOf(a),
+                    'latitude': a.lat,
+                    'longitude': a.lng,
+                  })
+              .toList(),
         }),
       );
 
-      // Exact optimum route with fixed start/end at node 0
-      final tspResult = _tsp.solveExact(cost);
-      final routeIdx = tspResult.route;
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw Exception('Rota optimizasyonu başarısız: ${response.statusCode}');
+      }
 
-      final totalMin = (tspResult.totalCost / 60.0).round();
-      final totalKm = _tourCostIdxKm(matrix, routeIdx);
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      final optimizedOrder = List<int>.from(decoded['optimizedOrder']);
+      final totalMin = decoded['totalDurationMin'] as int;
+      final totalKm = double.parse(decoded['totalDistanceKm'].toString());
+
+      // routeIdx: nodes dizisindeki tam kapalı tur (ev -> duraklar -> ev)
+      final routeIdx = <int>[
+        0,
+        ...optimizedOrder.map((i) => i + 1),
+        0,
+      ];
       final stops = routeIdx.map((i) => nodes[i]).toList();
       final path = stops.map((a) => a.address).toList();
       if (!mounted) return;
@@ -963,7 +976,7 @@ class _HomePageState extends State<HomePage> {
           totalKm: totalKm,
           path: path,
           hasAutoStart: false,
-          title: 'Rota (Exact TSP + OSRM)',
+          title: 'Rota (Google Trafik + Exact TSP)',
           noteOverride: 'Sabit başlangıç/bitiş noktası: ${home.address}',
         ),
       );
@@ -972,7 +985,7 @@ class _HomePageState extends State<HomePage> {
       Navigator.pop(context);
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('OSRM hata: $e')));
+      ).showSnackBar(SnackBar(content: Text('Rota optimizasyon hatası: $e')));
     }
   }
 
@@ -3325,7 +3338,7 @@ class _RouteResultDialog extends StatelessWidget {
     required this.totalKm,
     required this.path,
     required this.hasAutoStart,
-    this.title = 'Rota (Gerçek Süre/Mesafe - OSRM)',
+    this.title = 'Rota (Gerçek Süre/Mesafe - Google Trafik)',
     this.noteOverride,
   });
 
@@ -3405,7 +3418,7 @@ class _RouteResultDialog extends StatelessWidget {
                           ),
                         ),
                         const Text(
-                          'OSRM — Gerçek Süre / Mesafe',
+                          'Google Trafik — Gerçek Süre / Mesafe',
                           style: TextStyle(
                             color: Color(0xFF9DAFC8),
                             fontSize: 11,
