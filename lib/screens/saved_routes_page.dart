@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -49,11 +50,24 @@ class _SavedRoutesPageState extends State<SavedRoutesPage> {
   bool _loading = true;
   String? _error;
   List<_RouteView> _routes = [];
+  Timer? _autoRefreshTimer;
 
   @override
   void initState() {
     super.initState();
     _load();
+    // Kuryenin mobilde işaretlediği durak tamamlama durumu burada da
+    // otomatik yansısın diye 10 saniyede bir sessizce yeniden çekiyoruz.
+    _autoRefreshTimer = Timer.periodic(
+      const Duration(seconds: 10),
+      (_) => _load(silent: true),
+    );
+  }
+
+  @override
+  void dispose() {
+    _autoRefreshTimer?.cancel();
+    super.dispose();
   }
 
   String _fmtDate(DateTime d) =>
@@ -111,11 +125,13 @@ class _SavedRoutesPageState extends State<SavedRoutesPage> {
     );
   }
 
-  Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+  Future<void> _load({bool silent = false}) async {
+    if (!silent) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
 
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -137,8 +153,12 @@ class _SavedRoutesPageState extends State<SavedRoutesPage> {
         }
       }
     } catch (e) {
-      _error = 'Rotalar yüklenirken bir hata oluştu, cihazdaki kayıtlar gösteriliyor.';
-      _routes = _fromLocalRecords();
+      // Sessiz (otomatik) yenilemede geçici bir ağ hatası ekranı bozmasın;
+      // en son başarılı veriyi göstermeye devam et.
+      if (!silent) {
+        _error = 'Rotalar yüklenirken bir hata oluştu, cihazdaki kayıtlar gösteriliyor.';
+        _routes = _fromLocalRecords();
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
