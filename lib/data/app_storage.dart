@@ -19,6 +19,10 @@ class AppStorage {
   AppStorage._();
   static final AppStorage instance = AppStorage._();
 
+  /// Backend'e rota/filo senkronizasyonu başarısız olduğunda çağrılır.
+  /// UI tarafı (ör. HomePage) bunu dinleyip kullanıcıya bir uyarı gösterebilir.
+  void Function(String message)? onSyncError;
+
   static const _keyAddresses = 'addresses_v1';
   static const _keyRoutes = 'routes_v1';
   static const _keyUploads = 'uploads_v1';
@@ -143,7 +147,7 @@ class AppStorage {
           .toList();
 
       try {
-        await http.post(
+        final response = await http.post(
           Uri.parse("https://route-backend-jeu7.onrender.com/routes"),
           headers: {
             "Content-Type": "application/json",
@@ -162,9 +166,21 @@ class AppStorage {
             },
           }),
         );
+
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          debugPrint(
+            "Backend rota kaydetme hatası: ${response.statusCode} ${response.body}",
+          );
+          onSyncError?.call(
+            "Rota sunucuya kaydedilemedi (${response.statusCode}). Mobil uygulama bu rotayı görmeyebilir.",
+          );
+        }
       } catch (e) {
-        // Backend'e gönderilemezse web uygulaması bozulmasın
+        // Backend'e gönderilemezse web uygulaması bozulmasın, ama kullanıcıyı bilgilendir
         debugPrint("Backend rota kaydetme hatası: $e");
+        onSyncError?.call(
+          "Rota sunucuya kaydedilemedi. İnternet bağlantınızı kontrol edin.",
+        );
       }
     }
   }
@@ -253,14 +269,24 @@ class AppStorage {
     _fleetPushTimer?.cancel();
     _fleetPushTimer = Timer(const Duration(seconds: 3), () async {
       try {
-        await http.post(
+        final response = await http.post(
           Uri.parse("https://route-backend-jeu7.onrender.com/fleet/$userId"),
           headers: {"Content-Type": "application/json"},
           body: jsonEncode({"vehicles": data}),
         );
+
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          debugPrint(
+            "Backend filo kaydetme hatası: ${response.statusCode} ${response.body}",
+          );
+          onSyncError?.call(
+            "Filo bilgisi sunucuya kaydedilemedi (${response.statusCode}).",
+          );
+        }
       } catch (e) {
-        // Backend'e gönderilemezse web uygulaması bozulmasın
+        // Backend'e gönderilemezse web uygulaması bozulmasın, ama kullanıcıyı bilgilendir
         debugPrint("Backend filo kaydetme hatası: $e");
+        onSyncError?.call("Filo bilgisi sunucuya kaydedilemedi.");
       }
     });
   }

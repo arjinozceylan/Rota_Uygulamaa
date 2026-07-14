@@ -256,10 +256,34 @@ class _HomePageState extends State<HomePage> {
       if (!addressCards.contains(text)) addressCards.insert(0, text);
     }
     _searchCtrl.addListener(_onSearchChanged);
+    AppStorage.instance.onSyncError = _showSyncErrorSnackBar;
+  }
+
+  void _showSyncErrorSnackBar(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: const Color(0xFFE53935),
+        duration: const Duration(seconds: 5),
+        content: Row(
+          children: [
+            const Icon(Icons.cloud_off_rounded, color: Colors.white, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
   void dispose() {
+    AppStorage.instance.onSyncError = null;
     _searchDebounce?.cancel();
     _searchCtrl.dispose();
     _manualCtrl.dispose();
