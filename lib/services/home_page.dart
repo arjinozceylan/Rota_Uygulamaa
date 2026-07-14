@@ -577,7 +577,7 @@ class _HomePageState extends State<HomePage> {
                 "Adres bulundu: ${addr.address.split(',').take(2).join(', ')}",
                 style: const TextStyle(color: Colors.white),
               ),
-              duration: const Duration(seconds: 3),
+              duration: const Duration(seconds: 5),
             ),
           );
         } else {
