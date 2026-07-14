@@ -944,7 +944,7 @@ class _HomePageState extends State<HomePage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: const Color(0xFF1A3A5C),
-          duration: const Duration(seconds: 4),
+          duration: const Duration(seconds: 3),
           content: Row(
             children: [
               const Icon(Icons.check_circle_rounded,
@@ -968,6 +968,12 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
       );
+
+      Future.delayed(const Duration(seconds: 5), () {
+        if (mounted) {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        }
+      });
 
       showDialog(
         context: context,
