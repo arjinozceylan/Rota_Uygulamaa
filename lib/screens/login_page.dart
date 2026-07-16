@@ -778,18 +778,6 @@ class _ExistingForm extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 6),
-        Align(
-          alignment: Alignment.centerRight,
-          child: TextButton(
-            onPressed: () => context.go('/forgot-password'),
-            child: Text(
-              'Şifremi unuttum?',
-              style: TextStyle(color: accent.withOpacity(0.85), fontSize: 12.5),
-            ),
-          ),
-        ),
-        const SizedBox(height: 6),
         SizedBox(
           height: 48,
           child: ElevatedButton(
