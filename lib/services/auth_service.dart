@@ -25,6 +25,10 @@ class AuthService {
         await prefs.setInt('user_id', body['user_id'] as int);
         await prefs.setString('username', body['username']?.toString() ?? username);
         await prefs.setBool('is_guest', false);
+        final authToken = body['token'];
+        if (authToken != null) {
+          await prefs.setString('auth_token', authToken.toString());
+        }
         return null; // hata yok
       } else {
         return body["error"] ??
@@ -40,5 +44,15 @@ class AuthService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('is_guest', true);
     await prefs.remove('user_id');
+  }
+
+  /// Backend isteklerinde kullanılacak, token içeren standart header'lar.
+  static Future<Map<String, String>> authHeaders() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('auth_token');
+    return {
+      'Content-Type': 'application/json',
+      if (token != null) 'Authorization': 'Bearer $token',
+    };
   }
 }

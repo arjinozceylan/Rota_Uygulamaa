@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/reports_page.dart';
+import '../services/auth_service.dart';
 
 /// Tek bir durağın görüntülenme modeli — hem backend'den hem yerel
 /// depodan gelen veriyi ortak bir şekle çevirmek için kullanılır.
@@ -141,7 +142,10 @@ class _SavedRoutesPageState extends State<SavedRoutesPage> {
         // Misafir modu: backend'de kullanıcıya bağlı rota yok, cihazdakini göster.
         _routes = _fromLocalRecords();
       } else {
-        final res = await http.get(Uri.parse('$_baseUrl/routes/$userId'));
+        final res = await http.get(
+          Uri.parse('$_baseUrl/routes/$userId'),
+          headers: await AuthService.authHeaders(),
+        );
         if (res.statusCode == 200) {
           final data = jsonDecode(res.body) as List;
           _routes = data

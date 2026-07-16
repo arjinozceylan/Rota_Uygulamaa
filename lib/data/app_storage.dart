@@ -8,6 +8,7 @@ import '../data/uploaded_files_store.dart';
 import '../models/calendar_event.dart';
 import '../models/vehicle_workspace.dart';
 import '../services/reports_page.dart';
+import '../services/auth_service.dart';
 
 import 'package:http/http.dart' as http;
 
@@ -149,9 +150,7 @@ class AppStorage {
       try {
         final response = await http.post(
           Uri.parse("https://route-backend-jeu7.onrender.com/routes"),
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: await AuthService.authHeaders(),
           body: jsonEncode({
             "user_id": userId,
             "vehicle_id": lastRoute.vehicleId?.index,
@@ -271,7 +270,7 @@ class AppStorage {
       try {
         final response = await http.post(
           Uri.parse("https://route-backend-jeu7.onrender.com/fleet/$userId"),
-          headers: {"Content-Type": "application/json"},
+          headers: await AuthService.authHeaders(),
           body: jsonEncode({"vehicles": data}),
         );
 

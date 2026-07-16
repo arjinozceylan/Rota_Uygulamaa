@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
+import 'auth_service.dart';
 
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
@@ -881,7 +882,7 @@ class _HomePageState extends State<HomePage> {
       final stopsForRequest = nodes.sublist(1);
       final response = await http.post(
         Uri.parse('https://route-backend-jeu7.onrender.com/routes/optimize'),
-        headers: {'Content-Type': 'application/json'},
+        headers: await AuthService.authHeaders(),
         body: jsonEncode({
           'origin': {'latitude': home.lat, 'longitude': home.lng},
           'stops': stopsForRequest

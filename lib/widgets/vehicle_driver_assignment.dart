@@ -44,6 +44,7 @@ class _VehicleDriverAssignmentState extends State<VehicleDriverAssignment> {
     try {
       final response = await http.get(
         Uri.parse('${AuthService.baseUrl}/users/drivers'),
+        headers: await AuthService.authHeaders(),
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as List;
@@ -77,7 +78,7 @@ class _VehicleDriverAssignmentState extends State<VehicleDriverAssignment> {
         if (d['vehicle_id'] == _vehicleNumber && d['id'] != userId) {
           await http.post(
             Uri.parse('${AuthService.baseUrl}/users/${d['id']}/assign-vehicle'),
-            headers: {'Content-Type': 'application/json'},
+            headers: await AuthService.authHeaders(),
             body: jsonEncode({'vehicle_id': null}),
           );
         }
@@ -85,7 +86,7 @@ class _VehicleDriverAssignmentState extends State<VehicleDriverAssignment> {
       if (userId != null) {
         await http.post(
           Uri.parse('${AuthService.baseUrl}/users/$userId/assign-vehicle'),
-          headers: {'Content-Type': 'application/json'},
+          headers: await AuthService.authHeaders(),
           body: jsonEncode({'vehicle_id': _vehicleNumber}),
         );
       }
