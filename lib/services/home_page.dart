@@ -357,8 +357,11 @@ class _HomePageState extends State<HomePage> {
     final t = text.trim();
     final code = 'M${(_manualCodeCounter++).toString().padLeft(3, '0')}';
     try {
-      // OSM Places Service'den adres ara
-      final results = await _placesService.search(query: t);
+      // OSM Places Service'den adres ara (isim/telefon gibi adres-dışı
+      // kısımlar geocoding başarısını düşürdüğü için sorgu temizlenir)
+      final results = await _placesService.search(
+        query: _sanitizeForGeocoding(t),
+      );
       if (results.isNotEmpty) {
         final first = results.first;
         return Address(
@@ -645,6 +648,72 @@ class _HomePageState extends State<HomePage> {
     return v.trim();
   }
 
+  // Tırnak içindeki ayraçları (ör. adres alanının içindeki virgül) dikkate
+  // alan CSV satır ayrıştırıcı. Naif split(sep), tırnaklı alanların içinde
+  // ayraç geçtiğinde sütunları yanlış böler ve adrese sahte tırnak bırakır.
+  List<String> _parseCsvLine(String line, String sep) {
+    final result = <String>[];
+    final buffer = StringBuffer();
+    var inQuotes = false;
+    for (var i = 0; i < line.length; i++) {
+      final ch = line[i];
+      if (inQuotes) {
+        if (ch == '"') {
+          if (i + 1 < line.length && line[i + 1] == '"') {
+            buffer.write('"');
+            i++;
+          } else {
+            inQuotes = false;
+          }
+        } else {
+          buffer.write(ch);
+        }
+      } else if (ch == '"') {
+        inQuotes = true;
+      } else if (ch == sep) {
+        result.add(buffer.toString().trim());
+        buffer.clear();
+      } else {
+        buffer.write(ch);
+      }
+    }
+    result.add(buffer.toString().trim());
+    return result;
+  }
+
+  // Geocoding sorgusuna gönderilmeden önce adres metnini temizler: sıra no
+  // öneki, isim gibi adres-dışı virgüllü segmentler ve telefon numaraları
+  // Nominatim'in adresi bulmasını engelliyor. Görüntülenen orijinal adres
+  // metni bu temizlikten etkilenmez, sadece arama sorgusu için kullanılır.
+  String _sanitizeForGeocoding(String raw) {
+    // Sadece "14 - " gibi tireli sıra no önekini kaldır; "100.YIL MAH." gibi
+    // noktalı mahalle isimlerine dokunma (örn. "100. Yıl Mahallesi").
+    var s = raw.replaceFirst(RegExp(r'^\s*\d+\s*-\s*'), '');
+
+    final addressKeyword = RegExp(
+      r'(MAH\.?|MH\.?|SOK\.?|SK\.?|CAD\.?|CD\.?|BULV|BLV|APT|SİTESİ|SITESI|NO\s*:)',
+      caseSensitive: false,
+    );
+    final parts = s
+        .split(',')
+        .map((p) => p.trim())
+        .where((p) => p.isNotEmpty)
+        .toList();
+    if (parts.length > 1) {
+      final keep = parts.where((p) => addressKeyword.hasMatch(p)).toList();
+      if (keep.isNotEmpty) s = keep.join(', ');
+    }
+
+    s = s.replaceAll(
+      RegExp(r'\b(TEL|GSM|TELEFON)\b\s*[:\-]?\s*\d[\d\s]{6,}', caseSensitive: false),
+      ' ',
+    );
+    s = s.replaceAll(RegExp(r'\b0?5\d{9}\b'), ' ');
+    s = s.replaceAll(RegExp(r'\s+'), ' ').trim();
+
+    return s.isEmpty ? raw.trim() : s;
+  }
+
   // ── CSV import ────────────────────────────────────────────────────────────
   Future<void> _importAddressesFromExcel() async {
     try {
@@ -683,7 +752,7 @@ class _HomePageState extends State<HomePage> {
       final commaCount = ','.allMatches(header).length;
       final semiCount = ';'.allMatches(header).length;
       final sep = semiCount > commaCount ? ';' : ',';
-      final headerCols = header.split(sep).map((c) => c.trim()).toList();
+      final headerCols = _parseCsvLine(header, sep);
 
       // Adres sütununu başlığa göre bul. TC No, hasta adı-soyadı, irtibat,
       // başvuru/ziyaret tarihi, uygunluk durumu gibi hassas sütunlar hiç
@@ -704,7 +773,7 @@ class _HomePageState extends State<HomePage> {
       for (final line in lines.skip(1)) {
         final raw = line.trim();
         if (raw.isEmpty) continue;
-        final cols = raw.split(sep);
+        final cols = _parseCsvLine(raw, sep);
         String addressText;
         if (addressColIndex == headerCols.length - 1 &&
             cols.length > headerCols.length) {
