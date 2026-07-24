@@ -709,6 +709,52 @@ class _HomePageState extends State<HomePage> {
       ' ',
     );
     s = s.replaceAll(RegExp(r'\b0?5\d{9}\b'), ' ');
+
+    // Nominatim kısaltmaları ("SOK.", "MAH.") güvenilir şekilde tanımıyor;
+    // tam kelimeye genişletmek eşleşme oranını belirgin şekilde artırıyor.
+    s = s.replaceAllMapped(
+      RegExp(r'\bMAH(?:ALLES[İI])?\.?\b', caseSensitive: false),
+      (_) => 'Mahallesi ',
+    );
+    s = s.replaceAllMapped(
+      RegExp(r'\bMH\.?\b', caseSensitive: false),
+      (_) => 'Mahallesi ',
+    );
+    s = s.replaceAllMapped(
+      RegExp(r'\bSOK(?:AK)?\.?\b', caseSensitive: false),
+      (_) => 'Sokak ',
+    );
+    s = s.replaceAllMapped(
+      RegExp(r'\bSK\.?\b', caseSensitive: false),
+      (_) => 'Sokak ',
+    );
+    s = s.replaceAllMapped(
+      RegExp(r'\bCAD(?:DES[İI])?\.?\b', caseSensitive: false),
+      (_) => 'Caddesi ',
+    );
+    s = s.replaceAllMapped(
+      RegExp(r'\bCD\.?\b', caseSensitive: false),
+      (_) => 'Caddesi ',
+    );
+    s = s.replaceAllMapped(
+      RegExp(r'\bBULV(?:ARI)?\.?\b', caseSensitive: false),
+      (_) => 'Bulvarı ',
+    );
+    s = s.replaceAllMapped(
+      RegExp(r'\bBLV\.?\b', caseSensitive: false),
+      (_) => 'Bulvarı ',
+    );
+
+    // Sokak/Cadde/Bulvar adından sonra gelen apartman/kat/daire/site bilgisi
+    // Nominatim'in eşleşmesini engelliyor; sokak adına kadar kırp.
+    final streetMatches = RegExp(
+      r'(Sokak|Caddesi|Bulvarı)\b',
+      caseSensitive: false,
+    ).allMatches(s).toList();
+    if (streetMatches.isNotEmpty) {
+      s = s.substring(0, streetMatches.first.end);
+    }
+
     s = s.replaceAll(RegExp(r'\s+'), ' ').trim();
 
     return s.isEmpty ? raw.trim() : s;
