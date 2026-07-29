@@ -3,8 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
-  static const String baseUrl = "https://route-backend-jeu7.onrender.com";
-
+  static const String baseUrl = "http://100.118.211.75:3000";
   static Future<String?> login(String username, String password) async {
     try {
       final response = await http.post(
@@ -23,7 +22,8 @@ class AuthService {
       if (response.statusCode == 200) {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setInt('user_id', body['user_id'] as int);
-        await prefs.setString('username', body['username']?.toString() ?? username);
+        await prefs.setString(
+            'username', body['username']?.toString() ?? username);
         await prefs.setBool('is_guest', false);
         final authToken = body['token'];
         if (authToken != null) {

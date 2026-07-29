@@ -273,7 +273,8 @@ class _HomePageState extends State<HomePage> {
             Expanded(
               child: Text(
                 message,
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                style: const TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.w600),
               ),
             ),
           ],
@@ -437,12 +438,14 @@ class _HomePageState extends State<HomePage> {
                           initialCenter: point,
                           initialZoom: 15,
                           interactionOptions: const InteractionOptions(
-                            flags: InteractiveFlag.pinchZoom | InteractiveFlag.drag,
+                            flags: InteractiveFlag.pinchZoom |
+                                InteractiveFlag.drag,
                           ),
                         ),
                         children: [
                           TileLayer(
-                            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                            urlTemplate:
+                                'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                             userAgentPackageName: 'com.rota360.rota_uygulamaa',
                           ),
                           MarkerLayer(
@@ -694,18 +697,16 @@ class _HomePageState extends State<HomePage> {
       r'(MAH\.?|MH\.?|SOK\.?|SK\.?|CAD\.?|CD\.?|BULV|BLV|APT|SİTESİ|SITESI|NO\s*:)',
       caseSensitive: false,
     );
-    final parts = s
-        .split(',')
-        .map((p) => p.trim())
-        .where((p) => p.isNotEmpty)
-        .toList();
+    final parts =
+        s.split(',').map((p) => p.trim()).where((p) => p.isNotEmpty).toList();
     if (parts.length > 1) {
       final keep = parts.where((p) => addressKeyword.hasMatch(p)).toList();
       if (keep.isNotEmpty) s = keep.join(', ');
     }
 
     s = s.replaceAll(
-      RegExp(r'\b(TEL|GSM|TELEFON)\b\s*[:\-]?\s*\d[\d\s]{6,}', caseSensitive: false),
+      RegExp(r'\b(TEL|GSM|TELEFON)\b\s*[:\-]?\s*\d[\d\s]{6,}',
+          caseSensitive: false),
       ' ',
     );
     s = s.replaceAll(RegExp(r'\b0?5\d{9}\b'), ' ');
@@ -982,7 +983,8 @@ class _HomePageState extends State<HomePage> {
               CircularProgressIndicator(),
               SizedBox(width: 16),
               Expanded(
-                child: Text('Gerçek süre/mesafe hesaplanıyor (Google Trafik)...'),
+                child:
+                    Text('Gerçek süre/mesafe hesaplanıyor (Google Trafik)...'),
               ),
             ],
           ),
@@ -996,7 +998,7 @@ class _HomePageState extends State<HomePage> {
       // aynı algoritma, aynı veri kaynağı (tutarlılık için).
       final stopsForRequest = nodes.sublist(1);
       final response = await http.post(
-        Uri.parse('https://route-backend-jeu7.onrender.com/routes/optimize'),
+        Uri.parse('http://100.118.211.75:3000/routes/optimize'),
         headers: await AuthService.authHeaders(),
         body: jsonEncode({
           'origin': {'latitude': home.lat, 'longitude': home.lng},
@@ -1189,7 +1191,7 @@ class _HomePageState extends State<HomePage> {
                               fontSize: 15,
                             ),
                           ),
-                        const SizedBox(height: 6),
+                          const SizedBox(height: 6),
                           VehicleDriverAssignment(
                             vehicleId: _fleetState.activeVehicle,
                           ),
@@ -1254,7 +1256,8 @@ class _HomePageState extends State<HomePage> {
                               _onSearchChanged();
                             },
                             onAddSuggestion: (addr) async {
-                              final confirmed = await _confirmAddressOnMap(addr);
+                              final confirmed =
+                                  await _confirmAddressOnMap(addr);
                               if (!confirmed) return;
                               if (!mounted) return;
                               _addAddressToPoolAndCards(addr);

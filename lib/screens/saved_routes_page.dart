@@ -46,8 +46,7 @@ class _SavedRoutesPageState extends State<SavedRoutesPage> {
   static const _textDark = Color(0xFFE8EDF3);
   static const _textLight = Color(0xFF6B7A8D);
 
-  static const String _baseUrl = 'https://route-backend-jeu7.onrender.com';
-
+  static const String _baseUrl = 'http://100.118.211.75:3000';
   bool _loading = true;
   String? _error;
   List<_RouteView> _routes = [];
@@ -102,7 +101,8 @@ class _SavedRoutesPageState extends State<SavedRoutesPage> {
     final stopsRaw = routeJson['stops'] as List? ?? const [];
     final sorted = stopsRaw.map((e) => e as Map<String, dynamic>).toList()
       ..sort(
-        (a, b) => ((a['order'] ?? 0) as num).compareTo((b['order'] ?? 0) as num),
+        (a, b) =>
+            ((a['order'] ?? 0) as num).compareTo((b['order'] ?? 0) as num),
       );
 
     final stops = sorted.map((s) {
@@ -160,7 +160,8 @@ class _SavedRoutesPageState extends State<SavedRoutesPage> {
       // Sessiz (otomatik) yenilemede geçici bir ağ hatası ekranı bozmasın;
       // en son başarılı veriyi göstermeye devam et.
       if (!silent) {
-        _error = 'Rotalar yüklenirken bir hata oluştu, cihazdaki kayıtlar gösteriliyor.';
+        _error =
+            'Rotalar yüklenirken bir hata oluştu, cihazdaki kayıtlar gösteriliyor.';
         _routes = _fromLocalRecords();
       }
     } finally {
@@ -207,7 +208,8 @@ class _SavedRoutesPageState extends State<SavedRoutesPage> {
                   tooltip: 'Yenile',
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
                     color: _accent.withOpacity(0.10),
                     borderRadius: BorderRadius.circular(20),
@@ -229,7 +231,8 @@ class _SavedRoutesPageState extends State<SavedRoutesPage> {
               Padding(
                 padding: const EdgeInsets.only(top: 10),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
                     color: const Color(0xFFFFF3E0).withOpacity(0.08),
                     borderRadius: BorderRadius.circular(10),
@@ -270,7 +273,8 @@ class _SavedRoutesPageState extends State<SavedRoutesPage> {
                       ? _buildEmpty()
                       : ListView.separated(
                           itemCount: _routes.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 12),
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: 12),
                           itemBuilder: (context, index) {
                             final r = _routes[index];
                             final routeNo = index + 1;
@@ -294,7 +298,8 @@ class _SavedRoutesPageState extends State<SavedRoutesPage> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.route_rounded, size: 56, color: _textLight.withOpacity(0.4)),
+          Icon(Icons.route_rounded,
+              size: 56, color: _textLight.withOpacity(0.4)),
           const SizedBox(height: 16),
           const Text(
             'Henüz rota oluşturulmadı',
@@ -398,7 +403,6 @@ class _RouteCardState extends State<_RouteCard> {
                     ),
                   ),
                   const SizedBox(width: 12),
-
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -422,7 +426,6 @@ class _RouteCardState extends State<_RouteCard> {
                       ],
                     ),
                   ),
-
                   _StatChip(
                     label: widget.fmtDur(r.totalMin),
                     icon: Icons.timer_rounded,
@@ -441,7 +444,6 @@ class _RouteCardState extends State<_RouteCard> {
                     color: done == total && total > 0 ? _green : _orange,
                   ),
                   const SizedBox(width: 12),
-
                   AnimatedRotation(
                     turns: _expanded ? 0.5 : 0,
                     duration: const Duration(milliseconds: 200),
@@ -465,7 +467,8 @@ class _RouteCardState extends State<_RouteCard> {
                 children: [
                   const Row(
                     children: [
-                      Icon(Icons.alt_route_rounded, size: 14, color: _textLight),
+                      Icon(Icons.alt_route_rounded,
+                          size: 14, color: _textLight),
                       SizedBox(width: 6),
                       Text(
                         'Rota Sırası',
@@ -567,7 +570,8 @@ class _RouteCardState extends State<_RouteCard> {
                                         ),
                                         decoration: BoxDecoration(
                                           color: _green.withOpacity(0.12),
-                                          borderRadius: BorderRadius.circular(6),
+                                          borderRadius:
+                                              BorderRadius.circular(6),
                                         ),
                                         child: const Text(
                                           'Tamamlandı',
