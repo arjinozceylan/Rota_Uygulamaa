@@ -111,7 +111,7 @@ class OsmPlacesService {
 
       final osmType = (m['osm_type'] ?? 'osm').toString();
       final osmId = (m['osm_id'] ?? m['place_id'] ?? '').toString();
-      final placeId = '\$osmType:\$osmId';
+      final placeId = '$osmType:$osmId';
 
       return Address(
         code: 'C001',

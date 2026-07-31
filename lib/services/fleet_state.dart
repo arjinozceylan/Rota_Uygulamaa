@@ -12,8 +12,8 @@ class FleetState extends ChangeNotifier {
   FleetState({
     Map<VehicleId, VehicleWorkspace>? fleet,
     VehicleId initialVehicle = VehicleId.vehicle1,
-  }) : _fleet = fleet ?? VehicleWorkspace.createInitialFleet(),
-       _activeVehicle = initialVehicle;
+  })  : _fleet = fleet ?? VehicleWorkspace.createInitialFleet(),
+        _activeVehicle = initialVehicle;
 
   final Map<VehicleId, VehicleWorkspace> _fleet;
   VehicleId _activeVehicle;

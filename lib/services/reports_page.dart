@@ -100,7 +100,7 @@ class RouteStore {
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
   }
 
-  ReportDataset datasetForTarget(_ReportTarget target) {
+  ReportDataset _datasetForTarget(_ReportTarget target) {
     if (target == _ReportTarget.all) {
       return ReportDataset(allRecords);
     }
@@ -251,7 +251,7 @@ class _ReportsPageState extends State<ReportsPage>
   @override
   Widget build(BuildContext context) {
     final fleet = context.watch<FleetState>();
-    final dataset = _store.datasetForTarget(_target);
+    final dataset = _store._datasetForTarget(_target);
 
     return Scaffold(
       backgroundColor: _C.bg,
@@ -341,7 +341,7 @@ class _ReportsPageState extends State<ReportsPage>
                       width: 40,
                       height: 40,
                       decoration: BoxDecoration(
-                        color: _C.accent.withOpacity(0.12),
+                        color: _C.accent.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: const Icon(
@@ -365,7 +365,7 @@ class _ReportsPageState extends State<ReportsPage>
                         Text(
                           '${dataset.totalRoutes} rota kaydı — ${_targetLabel(_target)}',
                           style: TextStyle(
-                            color: Colors.white.withOpacity(0.45),
+                            color: Colors.white.withValues(alpha: 0.45),
                             fontSize: 11.5,
                           ),
                         ),
@@ -414,7 +414,7 @@ class _ReportsPageState extends State<ReportsPage>
                         ),
                         label: const Text('Temizle'),
                         style: TextButton.styleFrom(
-                          foregroundColor: Colors.white.withOpacity(0.5),
+                          foregroundColor: Colors.white.withValues(alpha: 0.5),
                         ),
                       ),
                   ],
@@ -429,7 +429,7 @@ class _ReportsPageState extends State<ReportsPage>
                   indicatorColor: _C.accent,
                   indicatorWeight: 2.5,
                   labelColor: Colors.white,
-                  unselectedLabelColor: Colors.white.withOpacity(0.4),
+                  unselectedLabelColor: Colors.white.withValues(alpha: 0.4),
                   labelStyle: const TextStyle(
                     fontWeight: FontWeight.w800,
                     fontSize: 13,
@@ -726,7 +726,7 @@ class _StatsTab extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: idx.isEven
                             ? Colors.transparent
-                            : _C.cardBg.withOpacity(0.5),
+                            : _C.cardBg.withValues(alpha: 0.5),
                         border: Border(top: BorderSide(color: _C.stroke)),
                       ),
                       child: Row(
@@ -842,11 +842,11 @@ class _FrequencyTab extends StatelessWidget {
                 color: _C.surface,
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
-                  color: rank <= 3 ? rankColor.withOpacity(0.25) : _C.stroke,
+                  color: rank <= 3 ? rankColor.withValues(alpha: 0.25) : _C.stroke,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.03),
+                    color: Colors.black.withValues(alpha: 0.03),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),
@@ -861,7 +861,7 @@ class _FrequencyTab extends StatelessWidget {
                         width: 28,
                         height: 28,
                         decoration: BoxDecoration(
-                          color: rankColor.withOpacity(0.12),
+                          color: rankColor.withValues(alpha: 0.12),
                           shape: BoxShape.circle,
                         ),
                         child: Center(
@@ -896,7 +896,7 @@ class _FrequencyTab extends StatelessWidget {
                           vertical: 5,
                         ),
                         decoration: BoxDecoration(
-                          color: _C.accentNav.withOpacity(0.08),
+                          color: _C.accentNav.withValues(alpha: 0.08),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
@@ -1152,9 +1152,9 @@ class _ShiftCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.06),
+        color: color.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.2)),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1312,7 +1312,7 @@ class _HistoryTab extends StatelessWidget {
             border: Border.all(color: _C.stroke),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.03),
+                color: Colors.black.withValues(alpha: 0.03),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
@@ -1336,7 +1336,7 @@ class _HistoryTab extends StatelessWidget {
                       width: 32,
                       height: 32,
                       decoration: BoxDecoration(
-                        color: _C.accent.withOpacity(0.15),
+                        color: _C.accent.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Center(
@@ -1366,7 +1366,7 @@ class _HistoryTab extends StatelessWidget {
                           Text(
                             fmtDate(r.createdAt),
                             style: TextStyle(
-                              color: Colors.white.withOpacity(0.45),
+                              color: Colors.white.withValues(alpha: 0.45),
                               fontSize: 11.5,
                             ),
                           ),
@@ -1410,16 +1410,16 @@ class _HistoryTab extends StatelessWidget {
                       ),
                       decoration: BoxDecoration(
                         color: isFirst
-                            ? _C.green.withOpacity(0.08)
+                            ? _C.green.withValues(alpha: 0.08)
                             : isLast
-                                ? _C.accentNav.withOpacity(0.08)
+                                ? _C.accentNav.withValues(alpha: 0.08)
                                 : _C.cardBg,
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
                           color: isFirst
-                              ? _C.green.withOpacity(0.3)
+                              ? _C.green.withValues(alpha: 0.3)
                               : isLast
-                                  ? _C.accentNav.withOpacity(0.25)
+                                  ? _C.accentNav.withValues(alpha: 0.25)
                                   : _C.stroke,
                         ),
                       ),
@@ -1491,7 +1491,7 @@ class _MiniStat extends StatelessWidget {
         Text(
           label,
           style: TextStyle(
-            color: Colors.white.withOpacity(0.35),
+            color: Colors.white.withValues(alpha: 0.35),
             fontSize: 10,
             fontWeight: FontWeight.w600,
           ),
@@ -1527,7 +1527,7 @@ class _BigStat extends StatelessWidget {
         border: Border.all(color: _C.stroke),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -1540,7 +1540,7 @@ class _BigStat extends StatelessWidget {
             width: 34,
             height: 34,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.10),
+              color: color.withValues(alpha: 0.10),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, size: 17, color: color),
@@ -1656,7 +1656,7 @@ class _CompactReportTargetBar extends StatelessWidget {
         border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),

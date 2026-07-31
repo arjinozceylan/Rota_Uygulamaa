@@ -83,10 +83,10 @@ class _LoginPageState extends State<LoginPage> {
               Container(
                 width: 280,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF0F1624).withOpacity(0.85),
+                  color: const Color(0xFF0F1624).withValues(alpha: 0.85),
                   border: Border(
                     right: BorderSide(
-                      color: Colors.white.withOpacity(0.08),
+                      color: Colors.white.withValues(alpha: 0.08),
                       width: 1,
                     ),
                   ),
@@ -165,7 +165,7 @@ class _LoginPageState extends State<LoginPage> {
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                   fontSize: 12,
-                                  color: Colors.white.withOpacity(0.42),
+                                  color: Colors.white.withValues(alpha: 0.42),
                                 ),
                               ),
                             ],
@@ -229,7 +229,7 @@ class _DarkBackground extends StatelessWidget {
                 gradient: RadialGradient(
                   center: Alignment.topCenter,
                   radius: 1.2,
-                  colors: [Colors.white.withOpacity(0.06), Colors.transparent],
+                  colors: [Colors.white.withValues(alpha: 0.06), Colors.transparent],
                 ),
               ),
             ),
@@ -258,13 +258,13 @@ class _NeonBlob extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: color.withOpacity(opacity),
+        color: color.withValues(alpha: opacity),
         boxShadow: [
           BoxShadow(
             blurRadius: 90,
             spreadRadius: 14,
             offset: const Offset(0, 20),
-            color: color.withOpacity(opacity * 0.9),
+            color: color.withValues(alpha: opacity * 0.9),
           ),
         ],
       ),
@@ -285,8 +285,8 @@ class _DarkGlassCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(28),
-        color: const Color(0xFF0F1624).withOpacity(0.90),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
+        color: const Color(0xFF0F1624).withValues(alpha: 0.90),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
         boxShadow: const [
           BoxShadow(
             blurRadius: 50,
@@ -315,11 +315,11 @@ class _LeftBrandPanel extends StatelessWidget {
           end: Alignment.bottomRight,
           colors: [
             const Color(0xFF0E1626),
-            const Color(0xFF0E1626).withOpacity(0.65),
+            const Color(0xFF0E1626).withValues(alpha: 0.65),
           ],
         ),
         border: Border(
-          right: BorderSide(color: Colors.white.withOpacity(0.06)),
+          right: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
         ),
       ),
       child: Column(
@@ -333,12 +333,12 @@ class _LeftBrandPanel extends StatelessWidget {
                 height: 46,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(14),
-                  color: Colors.white.withOpacity(0.06),
-                  border: Border.all(color: Colors.white.withOpacity(0.10)),
+                  color: Colors.white.withValues(alpha: 0.06),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
                 ),
                 child: Icon(
                   Icons.route_rounded,
-                  color: Colors.white.withOpacity(0.85),
+                  color: Colors.white.withValues(alpha: 0.85),
                   size: 26,
                 ),
               ),
@@ -351,7 +351,7 @@ class _LeftBrandPanel extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 16.5,
                       fontWeight: FontWeight.w800,
-                      color: Colors.white.withOpacity(0.88),
+                      color: Colors.white.withValues(alpha: 0.88),
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -359,7 +359,7 @@ class _LeftBrandPanel extends StatelessWidget {
                     'Planla • Düzenle • Takip Et',
                     style: TextStyle(
                       fontSize: 12,
-                      color: Colors.white.withOpacity(0.50),
+                      color: Colors.white.withValues(alpha: 0.50),
                     ),
                   ),
                 ],
@@ -376,7 +376,7 @@ class _LeftBrandPanel extends StatelessWidget {
                   fontSize: 28,
                   height: 1.08,
                   fontWeight: FontWeight.w900,
-                  color: Colors.white.withOpacity(0.92),
+                  color: Colors.white.withValues(alpha: 0.92),
                 ),
               ),
               const SizedBox(height: 10),
@@ -386,7 +386,7 @@ class _LeftBrandPanel extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 13.2,
                   height: 1.35,
-                  color: Colors.white.withOpacity(0.55),
+                  color: Colors.white.withValues(alpha: 0.55),
                 ),
               ),
             ],
@@ -406,7 +406,7 @@ class _LeftBrandPanel extends StatelessWidget {
             'İpucu: Misafir modunda planlar cihazda tutulur.',
             style: TextStyle(
               fontSize: 12,
-              color: Colors.white.withOpacity(0.45),
+              color: Colors.white.withValues(alpha: 0.45),
             ),
           ),
         ],
@@ -427,20 +427,20 @@ class _Chip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(999),
-        color: Colors.white.withOpacity(0.06),
-        border: Border.all(color: Colors.white.withOpacity(0.10)),
+        color: Colors.white.withValues(alpha: 0.06),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 18, color: Colors.white.withOpacity(0.80)),
+          Icon(icon, size: 18, color: Colors.white.withValues(alpha: 0.80)),
           const SizedBox(width: 8),
           Text(
             text,
             style: TextStyle(
               fontWeight: FontWeight.w800,
               fontSize: 12.5,
-              color: Colors.white.withOpacity(0.86),
+              color: Colors.white.withValues(alpha: 0.86),
             ),
           ),
         ],
@@ -463,12 +463,12 @@ class _RightHeader extends StatelessWidget {
           height: 44,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
-            color: Colors.white.withOpacity(0.06),
-            border: Border.all(color: Colors.white.withOpacity(0.10)),
+            color: Colors.white.withValues(alpha: 0.06),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
           ),
           child: Icon(
             Icons.login_rounded,
-            color: Colors.white.withOpacity(0.85),
+            color: Colors.white.withValues(alpha: 0.85),
           ),
         ),
         const SizedBox(width: 12),
@@ -483,7 +483,7 @@ class _RightHeader extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w900,
-                      color: Colors.white.withOpacity(0.90),
+                      color: Colors.white.withValues(alpha: 0.90),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -494,9 +494,9 @@ class _RightHeader extends StatelessWidget {
                     ),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(999),
-                      color: const Color(0xFF53D6FF).withOpacity(0.12),
+                      color: const Color(0xFF53D6FF).withValues(alpha: 0.12),
                       border: Border.all(
-                        color: const Color(0xFF53D6FF).withOpacity(0.28),
+                        color: const Color(0xFF53D6FF).withValues(alpha: 0.28),
                       ),
                     ),
                     child: const Text(
@@ -515,7 +515,7 @@ class _RightHeader extends StatelessWidget {
                 'Hızlı ve düzenli şekilde başla',
                 style: TextStyle(
                   fontSize: 13,
-                  color: Colors.white.withOpacity(0.55),
+                  color: Colors.white.withValues(alpha: 0.55),
                 ),
               ),
             ],
@@ -545,8 +545,8 @@ class _ModeSwitch extends StatelessWidget {
       padding: const EdgeInsets.all(6),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
-        color: Colors.white.withOpacity(0.04),
-        border: Border.all(color: Colors.white.withOpacity(0.10)),
+        color: Colors.white.withValues(alpha: 0.04),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
       ),
       child: Row(
         children: [
@@ -596,9 +596,9 @@ class _Choice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bg = selected ? accent.withOpacity(0.10) : Colors.transparent;
+    final bg = selected ? accent.withValues(alpha: 0.10) : Colors.transparent;
     final br =
-        selected ? accent.withOpacity(0.40) : Colors.white.withOpacity(0.10);
+        selected ? accent.withValues(alpha: 0.40) : Colors.white.withValues(alpha: 0.10);
 
     return InkWell(
       borderRadius: BorderRadius.circular(14),
@@ -616,7 +616,7 @@ class _Choice extends StatelessWidget {
             Icon(
               icon,
               size: 20,
-              color: selected ? accent : Colors.white.withOpacity(0.75),
+              color: selected ? accent : Colors.white.withValues(alpha: 0.75),
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -630,7 +630,7 @@ class _Choice extends StatelessWidget {
                           title,
                           style: TextStyle(
                             fontWeight: FontWeight.w900,
-                            color: Colors.white.withOpacity(0.88),
+                            color: Colors.white.withValues(alpha: 0.88),
                           ),
                         ),
                       ),
@@ -647,7 +647,7 @@ class _Choice extends StatelessWidget {
                     subtitle,
                     style: TextStyle(
                       fontSize: 12,
-                      color: Colors.white.withOpacity(0.52),
+                      color: Colors.white.withValues(alpha: 0.52),
                     ),
                   ),
                 ],
@@ -682,8 +682,8 @@ class _GuestBlock extends StatelessWidget {
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
-            color: Colors.white.withOpacity(0.04),
-            border: Border.all(color: accent.withOpacity(0.35)),
+            color: Colors.white.withValues(alpha: 0.04),
+            border: Border.all(color: accent.withValues(alpha: 0.35)),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -695,7 +695,7 @@ class _GuestBlock extends StatelessWidget {
                   'Misafir modunda planlar cihazda tutulur. İstersen sonra mevcut kullanıcı ile giriş yapabilirsin.',
                   style: TextStyle(
                     height: 1.35,
-                    color: Colors.white.withOpacity(0.72),
+                    color: Colors.white.withValues(alpha: 0.72),
                   ),
                 ),
               ),
@@ -714,7 +714,7 @@ class _GuestBlock extends StatelessWidget {
             ),
             style: OutlinedButton.styleFrom(
               foregroundColor: accent,
-              side: BorderSide(color: accent.withOpacity(0.55), width: 1.2),
+              side: BorderSide(color: accent.withValues(alpha: 0.55), width: 1.2),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
               ),
@@ -788,9 +788,9 @@ class _ExistingForm extends StatelessWidget {
                     await onLogin!();
                   },
             style: ElevatedButton.styleFrom(
-              backgroundColor: accent.withOpacity(0.16),
+              backgroundColor: accent.withValues(alpha: 0.16),
               foregroundColor: accent,
-              side: BorderSide(color: accent.withOpacity(0.55), width: 1.2),
+              side: BorderSide(color: accent.withValues(alpha: 0.55), width: 1.2),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
               ),
@@ -835,7 +835,7 @@ class _ModernTextField extends StatelessWidget {
     return TextField(
       controller: controller,
       obscureText: obscureText,
-      style: TextStyle(color: Colors.white.withOpacity(0.88)),
+      style: TextStyle(color: Colors.white.withValues(alpha: 0.88)),
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,

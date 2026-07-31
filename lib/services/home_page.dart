@@ -1,10 +1,11 @@
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'auth_service.dart';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
@@ -14,20 +15,14 @@ import '../core/models/address.dart';
 import '../data/address_store.dart';
 import '../data/app_storage.dart';
 import '../data/uploaded_files_store.dart';
-import '../screens/excel_uploads_page.dart';
 import '../widgets/vehicle_driver_assignment.dart';
 import '../models/calendar_event.dart';
 import '../models/vehicle_workspace.dart';
 import 'fleet_state.dart';
 import '../screens/map_picker_page.dart';
 import '../screens/osm_places_service.dart';
-import '../screens/calendar_page.dart';
-import 'osrm_route_service.dart';
 import 'reports_page.dart';
-import '../screens/saved_routes_page.dart';
 import '../widgets/vehicle_selector_bar.dart';
-import 'tsp_optimizer_service.dart';
-import '../screens/help_page.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart' as ll;
 
@@ -56,89 +51,6 @@ class _NavItem {
   final IconData icon;
   final String label;
   const _NavItem({required this.icon, required this.label});
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// ROTA ALGORİTMASI (orijinalden aynen kopyalandı — değiştirilmedi)
-// ─────────────────────────────────────────────────────────────────────────────
-double _durMin(OsrmMatrix m, int i, int j) {
-  final v = m.durationsSeconds[i][j];
-  if (v == null) return 1e15;
-  return v / 60.0;
-}
-
-double _distKm(OsrmMatrix m, int i, int j) {
-  final v = m.distancesMeters[i][j];
-  if (v == null) return 1e15;
-  return v / 1000.0;
-}
-
-double _tourCostIdxMin(OsrmMatrix m, List<int> path) {
-  double sum = 0;
-  for (int k = 0; k < path.length - 1; k++) {
-    sum += _durMin(m, path[k], path[k + 1]);
-  }
-  return sum;
-}
-
-double _tourCostIdxKm(OsrmMatrix m, List<int> path) {
-  double sum = 0;
-  for (int k = 0; k < path.length - 1; k++) {
-    sum += _distKm(m, path[k], path[k + 1]);
-  }
-  return sum;
-}
-
-List<int> _nearestNeighborTourIdx(OsrmMatrix m, int startIdx) {
-  final n = m.n;
-  final unvisited = <int>{};
-  for (int i = 0; i < n; i++) {
-    if (i != startIdx) unvisited.add(i);
-  }
-  final route = <int>[startIdx];
-  int current = startIdx;
-  while (unvisited.isNotEmpty) {
-    int best = -1;
-    double bestCost = 1e15;
-    for (final cand in unvisited) {
-      final c = _durMin(m, current, cand);
-      if (c < bestCost) {
-        bestCost = c;
-        best = cand;
-      }
-    }
-    route.add(best);
-    unvisited.remove(best);
-    current = best;
-  }
-  route.add(startIdx);
-  return route;
-}
-
-List<int> _twoOptIdx(OsrmMatrix m, List<int> path) {
-  if (path.length <= 4) return path;
-  bool improved = true;
-  List<int> best = List<int>.from(path);
-  double bestCost = _tourCostIdxMin(m, best);
-  while (improved) {
-    improved = false;
-    for (int i = 1; i < best.length - 2; i++) {
-      for (int k = i + 1; k < best.length - 1; k++) {
-        final candidate = <int>[
-          ...best.sublist(0, i),
-          ...best.sublist(i, k + 1).reversed,
-          ...best.sublist(k + 1),
-        ];
-        final candCost = _tourCostIdxMin(m, candidate);
-        if (candCost < bestCost) {
-          best = candidate;
-          bestCost = candCost;
-          improved = true;
-        }
-      }
-    }
-  }
-  return best;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -173,8 +85,6 @@ class _HomePageState extends State<HomePage> {
   final TextEditingController _searchCtrl = TextEditingController();
   final TextEditingController _manualCtrl = TextEditingController();
   final OsmPlacesService _placesService = const OsmPlacesService();
-  final OsrmRouteService _osrm = const OsrmRouteService();
-  final TspOptimizerService _tsp = const TspOptimizerService();
   Timer? _searchDebounce;
   int _latestSearchId = 0;
   bool _isSearching = false;
@@ -183,9 +93,6 @@ class _HomePageState extends State<HomePage> {
   // ── Adres havuzu + araç bazlı rota workspace'i ──────────────────────────
   // addressCards: sol paneldeki ortak sürüklenebilir adres havuzu
   late final List<String> addressCards;
-
-  VehicleWorkspace _ws(BuildContext context) =>
-      context.read<FleetState>().activeWorkspace;
 
   List<String> get dropped => _currentWorkspace.dropped;
   Map<String, RepeatType> get repeatByAddress =>
@@ -238,7 +145,6 @@ class _HomePageState extends State<HomePage> {
   final List<String> _searchHistory = [];
   bool _showHistory = false;
 
-  @override
   Future<void> _persist() async {
     await AppStorage.instance.saveAll(
       addressCards: addressCards,
@@ -763,12 +669,15 @@ class _HomePageState extends State<HomePage> {
 
   // ── CSV import ────────────────────────────────────────────────────────────
   Future<void> _importAddressesFromExcel() async {
+    BuildContext? progressDialogContext;
     try {
-      final isMacDesktop = Platform.isMacOS;
+      final isMacDesktop = !kIsWeb && Platform.isMacOS;
       final result = await FilePicker.platform.pickFiles(
         type: isMacDesktop ? FileType.any : FileType.custom,
         allowedExtensions: isMacDesktop ? null : const ['csv'],
+        withData: true,
       );
+      if (!mounted) return;
       if (result == null || result.files.isEmpty) return;
       final pickedFile = result.files.first;
       final fileName = pickedFile.name.toLowerCase();
@@ -779,14 +688,18 @@ class _HomePageState extends State<HomePage> {
         return;
       }
 
-      final path = pickedFile.path;
-      if (path == null) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Dosya yolu bulunamadı')));
-        return;
+      Uint8List? bytes = pickedFile.bytes;
+      if (bytes == null) {
+        final path = pickedFile.path;
+        if (path == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Dosya içeriği okunamadı')),
+          );
+          return;
+        }
+        bytes = await File(path).readAsBytes();
       }
-      final bytes = await File(path).readAsBytes();
+      if (!mounted) return;
       final text = utf8.decode(bytes);
       final lines = const LineSplitter().convert(text);
       if (lines.isEmpty) {
@@ -853,24 +766,27 @@ class _HomePageState extends State<HomePage> {
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (_) => AlertDialog(
-          content: SizedBox(
-            height: 80,
-            child: Column(
-              children: [
-                const CircularProgressIndicator(),
-                const SizedBox(height: 16),
-                Expanded(
-                  child: Text(
-                    'Adresler haritanın üzerinde konumlandırılıyor...\n(${addressesToProcess.length} adres)',
-                    style: const TextStyle(fontSize: 13),
-                    textAlign: TextAlign.center,
+        builder: (dialogContext) {
+          progressDialogContext = dialogContext;
+          return AlertDialog(
+            content: SizedBox(
+              height: 80,
+              child: Column(
+                children: [
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 16),
+                  Expanded(
+                    child: Text(
+                      'Adresler haritanın üzerinde konumlandırılıyor...\n(${addressesToProcess.length} adres)',
+                      style: const TextStyle(fontSize: 13),
+                      textAlign: TextAlign.center,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ),
+          );
+        },
       );
 
       // Her adres için geocoding yap (sıra korunarak listenin sonuna eklenir)
@@ -898,11 +814,15 @@ class _HomePageState extends State<HomePage> {
       }
 
       if (!mounted) return;
-      Navigator.pop(context); // Progress dialog'u kapat
+      if (progressDialogContext != null && progressDialogContext!.mounted) {
+        Navigator.of(progressDialogContext!).pop();
+        progressDialogContext = null;
+      }
 
       if (added > 0) {
         UploadedFilesStore.add(pickedFile.name, added);
         await AppStorage.instance.saveUploads();
+        if (!mounted) return;
       }
 
       final message = added == addressesToProcess.length
@@ -913,7 +833,11 @@ class _HomePageState extends State<HomePage> {
         SnackBar(content: Text(message), duration: const Duration(seconds: 4)),
       );
     } catch (e) {
-      if (mounted) Navigator.pop(context); // Dialog'u kapat
+      if (!mounted) return;
+      if (progressDialogContext != null && progressDialogContext!.mounted) {
+        Navigator.of(progressDialogContext!).pop();
+        progressDialogContext = null;
+      }
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('CSV yükleme hatası: $e')));
@@ -1359,9 +1283,9 @@ class _Sidebar extends StatelessWidget {
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    color: _T.accent.withOpacity(0.18),
+                    color: _T.accent.withValues(alpha: 0.18),
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: _T.accent.withOpacity(0.35)),
+                    border: Border.all(color: _T.accent.withValues(alpha: 0.35)),
                   ),
                   child: const Center(
                     child: Text(
@@ -1392,9 +1316,9 @@ class _Sidebar extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.06),
+                color: Colors.white.withValues(alpha: 0.06),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.white.withOpacity(0.08)),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
               ),
               child: Row(
                 children: [
@@ -1402,7 +1326,7 @@ class _Sidebar extends StatelessWidget {
                     width: 38,
                     height: 38,
                     decoration: BoxDecoration(
-                      color: _T.accentRed.withOpacity(0.15),
+                      color: _T.accentRed.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Icon(
@@ -1472,7 +1396,7 @@ class _Sidebar extends StatelessWidget {
                             size: 18,
                             color: sel
                                 ? Colors.white
-                                : Colors.white.withOpacity(0.55),
+                                : Colors.white.withValues(alpha: 0.55),
                           ),
                           const SizedBox(width: 10),
                           Text(
@@ -1480,7 +1404,7 @@ class _Sidebar extends StatelessWidget {
                             style: TextStyle(
                               color: sel
                                   ? Colors.white
-                                  : Colors.white.withOpacity(0.55),
+                                  : Colors.white.withValues(alpha: 0.55),
                               fontWeight:
                                   sel ? FontWeight.w800 : FontWeight.w600,
                               fontSize: 13.5,
@@ -1514,7 +1438,7 @@ class _Sidebar extends StatelessWidget {
                   },
                   child: CircleAvatar(
                     radius: 20,
-                    backgroundColor: _T.accent.withOpacity(0.15),
+                    backgroundColor: _T.accent.withValues(alpha: 0.15),
                     child: const Icon(
                       Icons.help_outline,
                       color: _T.accent,
@@ -1572,7 +1496,7 @@ class _ModeToggleButton extends StatelessWidget {
           boxShadow: selected
               ? [
                   BoxShadow(
-                    color: color.withOpacity(0.28),
+                    color: color.withValues(alpha: 0.28),
                     blurRadius: 12,
                     offset: const Offset(0, 4),
                   ),
@@ -1660,7 +1584,7 @@ class _SearchPanel extends StatelessWidget {
         border: Border.all(color: _T.stroke),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 20,
             offset: const Offset(0, 6),
           ),
@@ -1724,7 +1648,7 @@ class _SearchPanel extends StatelessWidget {
                   border: Border.all(color: _T.stroke),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.08),
+                      color: Colors.black.withValues(alpha: 0.08),
                       blurRadius: 16,
                       offset: const Offset(0, 4),
                     ),
@@ -1810,7 +1734,7 @@ class _SearchPanel extends StatelessWidget {
                   border: Border.all(color: _T.stroke),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.08),
+                      color: Colors.black.withValues(alpha: 0.08),
                       blurRadius: 16,
                       offset: const Offset(0, 4),
                     ),
@@ -1997,7 +1921,7 @@ class _SearchBar extends StatelessWidget {
                     width: 28,
                     height: 28,
                     decoration: BoxDecoration(
-                      color: _T.accent.withOpacity(0.10),
+                      color: _T.accent.withValues(alpha: 0.10),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: const Icon(
@@ -2110,8 +2034,8 @@ class _ManualBarState extends State<_ManualBar> {
                         const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                     decoration: BoxDecoration(
                       color: _isValid
-                          ? _T.accent.withOpacity(0.15)
-                          : _T.strokeMid.withOpacity(0.3),
+                          ? _T.accent.withValues(alpha: 0.15)
+                          : _T.strokeMid.withValues(alpha: 0.3),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
@@ -2134,42 +2058,13 @@ class _ManualBarState extends State<_ManualBar> {
             child: Text(
               'Sadece koordinat girilebilir — örnek: 38.4189, 27.1287',
               style: TextStyle(
-                color: _T.accentRed.withOpacity(0.8),
+                color: _T.accentRed.withValues(alpha: 0.8),
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
               ),
             ),
           ),
       ],
-    );
-  }
-}
-
-class _ProviderBadge extends StatelessWidget {
-  const _ProviderBadge({required this.label, required this.color});
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 26,
-      height: 26,
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(7),
-        border: Border.all(color: color.withOpacity(0.25)),
-      ),
-      child: Center(
-        child: Text(
-          label,
-          style: TextStyle(
-            color: color,
-            fontWeight: FontWeight.w900,
-            fontSize: 12,
-          ),
-        ),
-      ),
     );
   }
 }
@@ -2189,10 +2084,10 @@ class _AddressRow extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: inQueue ? _T.accent.withOpacity(0.06) : _T.searchBg,
+        color: inQueue ? _T.accent.withValues(alpha: 0.06) : _T.searchBg,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: inQueue ? _T.accent.withOpacity(0.35) : _T.stroke,
+          color: inQueue ? _T.accent.withValues(alpha: 0.35) : _T.stroke,
         ),
       ),
       child: Row(
@@ -2224,9 +2119,9 @@ class _AddressRow extends StatelessWidget {
               width: 26,
               height: 26,
               decoration: BoxDecoration(
-                color: _T.accentRed.withOpacity(0.08),
+                color: _T.accentRed.withValues(alpha: 0.08),
                 shape: BoxShape.circle,
-                border: Border.all(color: _T.accentRed.withOpacity(0.25)),
+                border: Border.all(color: _T.accentRed.withValues(alpha: 0.25)),
               ),
               child: const Icon(
                 Icons.remove_rounded,
@@ -2261,10 +2156,10 @@ class _DraggingChip extends StatelessWidget {
       decoration: BoxDecoration(
         color: _T.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _T.accent.withOpacity(0.4)),
+        border: Border.all(color: _T.accent.withValues(alpha: 0.4)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.15),
+            color: Colors.black.withValues(alpha: 0.15),
             blurRadius: 16,
             offset: const Offset(0, 6),
           ),
@@ -2324,7 +2219,7 @@ class _QueuePanel extends StatelessWidget {
         border: Border.all(color: _T.stroke),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 20,
             offset: const Offset(0, 6),
           ),
@@ -2423,7 +2318,7 @@ class _QueuePanel extends StatelessWidget {
                       ),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: _T.accent,
-                        side: BorderSide(color: _T.accent.withOpacity(0.35)),
+                        side: BorderSide(color: _T.accent.withValues(alpha: 0.35)),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
                         ),
@@ -2470,13 +2365,13 @@ class _QueuePanel extends StatelessWidget {
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
                             color: isStart
-                                ? Colors.green.withOpacity(0.4)
+                                ? Colors.green.withValues(alpha: 0.4)
                                 : _T.stroke,
                           ),
                           boxShadow: [
                             BoxShadow(
                               color: (isStart ? Colors.green : _T.accent)
-                                  .withOpacity(0.06),
+                                  .withValues(alpha: 0.06),
                               blurRadius: 8,
                               offset: const Offset(0, 3),
                             ),
@@ -2507,7 +2402,7 @@ class _QueuePanel extends StatelessWidget {
                                 boxShadow: [
                                   BoxShadow(
                                     color: (isStart ? Colors.green : _T.accent)
-                                        .withOpacity(0.35),
+                                        .withValues(alpha: 0.35),
                                     blurRadius: 6,
                                     offset: const Offset(0, 2),
                                   ),
@@ -2557,7 +2452,7 @@ class _QueuePanel extends StatelessWidget {
                                   height: 28,
                                   decoration: BoxDecoration(
                                     color: isStart
-                                        ? Colors.green.withOpacity(0.12)
+                                        ? Colors.green.withValues(alpha: 0.12)
                                         : Colors.transparent,
                                     borderRadius: BorderRadius.circular(8),
                                   ),
@@ -2577,7 +2472,7 @@ class _QueuePanel extends StatelessWidget {
                                 width: 28,
                                 height: 28,
                                 decoration: BoxDecoration(
-                                  color: _T.accentRed.withOpacity(0.08),
+                                  color: _T.accentRed.withValues(alpha: 0.08),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: const Icon(
@@ -2721,8 +2616,8 @@ class _EmptyQueueStateState extends State<_EmptyQueueState>
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  _T.accent.withOpacity(0.08),
-                  const Color(0xFF3DBFDB).withOpacity(0.04),
+                  _T.accent.withValues(alpha: 0.08),
+                  const Color(0xFF3DBFDB).withValues(alpha: 0.04),
                 ],
               )
             : LinearGradient(
@@ -2816,9 +2711,9 @@ class _DropHereState extends StatelessWidget {
           width: 64,
           height: 64,
           decoration: BoxDecoration(
-            color: _T.accent.withOpacity(0.12),
+            color: _T.accent.withValues(alpha: 0.12),
             shape: BoxShape.circle,
-            border: Border.all(color: _T.accent.withOpacity(0.4), width: 2),
+            border: Border.all(color: _T.accent.withValues(alpha: 0.4), width: 2),
           ),
           child: const Icon(
             Icons.add_location_alt_rounded,
@@ -2838,7 +2733,7 @@ class _DropHereState extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           'Rota kuyruğuna eklenecek',
-          style: TextStyle(color: _T.accent.withOpacity(0.7), fontSize: 12.5),
+          style: TextStyle(color: _T.accent.withValues(alpha: 0.7), fontSize: 12.5),
         ),
       ],
     );
@@ -2869,8 +2764,8 @@ class _MapIllustration extends StatelessWidget {
                   shape: BoxShape.circle,
                   gradient: RadialGradient(
                     colors: [
-                      _T.accent.withOpacity(0.06),
-                      _T.accent.withOpacity(0.0),
+                      _T.accent.withValues(alpha: 0.06),
+                      _T.accent.withValues(alpha: 0.0),
                     ],
                   ),
                 ),
@@ -2890,7 +2785,7 @@ class _MapIllustration extends StatelessWidget {
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF1A3A5C).withOpacity(0.35),
+                    color: const Color(0xFF1A3A5C).withValues(alpha: 0.35),
                     blurRadius: 20,
                     offset: const Offset(0, 8),
                   ),
@@ -2950,7 +2845,7 @@ class _MapPin extends StatelessWidget {
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                color: color.withOpacity(0.5),
+                color: color.withValues(alpha: 0.5),
                 blurRadius: 6,
                 offset: const Offset(0, 2),
               ),
@@ -2972,7 +2867,7 @@ class _MapPin extends StatelessWidget {
           width: 6,
           height: 3,
           decoration: BoxDecoration(
-            color: color.withOpacity(0.3),
+            color: color.withValues(alpha: 0.3),
             borderRadius: BorderRadius.circular(3),
           ),
         ),
@@ -2996,7 +2891,7 @@ class _HintBadge extends StatelessWidget {
         border: Border.all(color: _T.stroke),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 6,
             offset: const Offset(0, 2),
           ),
@@ -3026,7 +2921,7 @@ class _MapGridPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.white.withOpacity(0.07)
+      ..color = Colors.white.withValues(alpha: 0.07)
       ..strokeWidth = 1;
 
     for (double x = 0; x <= size.width; x += size.width / 4) {
@@ -3046,7 +2941,7 @@ class _RouteLinePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = const Color(0xFF53D6FF).withOpacity(0.7)
+      ..color = const Color(0xFF53D6FF).withValues(alpha: 0.7)
       ..strokeWidth = 2.5
       ..strokeCap = StrokeCap.round
       ..style = PaintingStyle.stroke;
@@ -3065,7 +2960,7 @@ class _RouteLinePainter extends CustomPainter {
     canvas.drawPath(path, paint);
 
     // Nokta efektleri
-    final dotPaint = Paint()..color = const Color(0xFF53D6FF).withOpacity(0.4);
+    final dotPaint = Paint()..color = const Color(0xFF53D6FF).withValues(alpha: 0.4);
     canvas.drawCircle(
       Offset(size.width * 0.45, size.height * 0.46),
       2.5,
@@ -3094,8 +2989,8 @@ class _CountBadge extends StatelessWidget {
       height: 38,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: color.withOpacity(0.10),
-        border: Border.all(color: color.withOpacity(0.35), width: 1.5),
+        color: color.withValues(alpha: 0.10),
+        border: Border.all(color: color.withValues(alpha: 0.35), width: 1.5),
       ),
       child: Center(
         child: Text(
@@ -3152,10 +3047,10 @@ class _BottomBarState extends State<_BottomBar> {
                   vertical: 4,
                 ),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1A3A5C).withOpacity(0.08),
+                  color: const Color(0xFF1A3A5C).withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: const Color(0xFF1A3A5C).withOpacity(0.2),
+                    color: const Color(0xFF1A3A5C).withValues(alpha: 0.2),
                   ),
                 ),
                 child: Row(
@@ -3301,10 +3196,10 @@ class _TransferSummaryCard extends StatelessWidget {
             colors: [Color(0xFF1E3A5F), Color(0xFF0D2137)],
           ),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withOpacity(0.08)),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.25),
+              color: Colors.black.withValues(alpha: 0.25),
               blurRadius: 12,
               offset: const Offset(0, 4),
             ),
@@ -3319,7 +3214,7 @@ class _TransferSummaryCard extends StatelessWidget {
                   width: 28,
                   height: 28,
                   decoration: BoxDecoration(
-                    color: _T.accent.withOpacity(0.15),
+                    color: _T.accent.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Icon(
@@ -3346,8 +3241,8 @@ class _TransferSummaryCard extends StatelessWidget {
                   ),
                   decoration: BoxDecoration(
                     color: hasData
-                        ? Colors.green.withOpacity(0.2)
-                        : Colors.white.withOpacity(0.08),
+                        ? Colors.green.withValues(alpha: 0.2)
+                        : Colors.white.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
@@ -3355,7 +3250,7 @@ class _TransferSummaryCard extends StatelessWidget {
                     style: TextStyle(
                       color: hasData
                           ? Colors.greenAccent
-                          : Colors.white.withOpacity(0.4),
+                          : Colors.white.withValues(alpha: 0.4),
                       fontSize: 9,
                       fontWeight: FontWeight.w900,
                       letterSpacing: 0.5,
@@ -3425,9 +3320,9 @@ class _StatMini extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
+        color: Colors.white.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.white.withOpacity(0.06)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -3443,7 +3338,7 @@ class _StatMini extends StatelessWidget {
           Text(
             label,
             style: TextStyle(
-              color: Colors.white.withOpacity(0.45),
+              color: Colors.white.withValues(alpha: 0.45),
               fontSize: 10,
               fontWeight: FontWeight.w600,
             ),
@@ -3493,7 +3388,7 @@ class _RouteResultDialog extends StatelessWidget {
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.15),
+              color: Colors.black.withValues(alpha: 0.15),
               blurRadius: 40,
               offset: const Offset(0, 16),
             ),
@@ -3519,9 +3414,9 @@ class _RouteResultDialog extends StatelessWidget {
                     width: 42,
                     height: 42,
                     decoration: BoxDecoration(
-                      color: _T.accent.withOpacity(0.15),
+                      color: _T.accent.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: _T.accent.withOpacity(0.3)),
+                      border: Border.all(color: _T.accent.withValues(alpha: 0.3)),
                     ),
                     child: const Icon(
                       Icons.alt_route_rounded,
@@ -3560,10 +3455,10 @@ class _RouteResultDialog extends StatelessWidget {
                       vertical: 5,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.green.withOpacity(0.2),
+                      color: Colors.green.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
-                        color: Colors.greenAccent.withOpacity(0.4),
+                        color: Colors.greenAccent.withValues(alpha: 0.4),
                       ),
                     ),
                     child: const Row(
@@ -3691,10 +3586,10 @@ class _RouteResultDialog extends StatelessWidget {
                                 width: 28,
                                 height: 28,
                                 decoration: BoxDecoration(
-                                  color: dotColor.withOpacity(0.12),
+                                  color: dotColor.withValues(alpha: 0.12),
                                   shape: BoxShape.circle,
                                   border: Border.all(
-                                    color: dotColor.withOpacity(0.4),
+                                    color: dotColor.withValues(alpha: 0.4),
                                     width: 1.5,
                                   ),
                                 ),
@@ -3712,8 +3607,8 @@ class _RouteResultDialog extends StatelessWidget {
                                         begin: Alignment.topCenter,
                                         end: Alignment.bottomCenter,
                                         colors: [
-                                          dotColor.withOpacity(0.3),
-                                          _T.accent.withOpacity(0.15),
+                                          dotColor.withValues(alpha: 0.3),
+                                          _T.accent.withValues(alpha: 0.15),
                                         ],
                                       ),
                                       borderRadius: BorderRadius.circular(1),
@@ -3742,9 +3637,9 @@ class _RouteResultDialog extends StatelessWidget {
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(
                                   color: isStart
-                                      ? const Color(0xFF66BB6A).withOpacity(0.3)
+                                      ? const Color(0xFF66BB6A).withValues(alpha: 0.3)
                                       : isEnd
-                                          ? _T.accent.withOpacity(0.2)
+                                          ? _T.accent.withValues(alpha: 0.2)
                                           : _T.stroke,
                                 ),
                               ),
@@ -3806,7 +3701,7 @@ class _RouteResultDialog extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: const Color(0xFFFFF3E0),
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                    border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
                   ),
                   child: Row(
                     children: [
@@ -3881,7 +3776,7 @@ class _RouteStatCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: bgColor,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withOpacity(0.2)),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -3899,7 +3794,7 @@ class _RouteStatCard extends StatelessWidget {
           Text(
             label,
             style: TextStyle(
-              color: color.withOpacity(0.7),
+              color: color.withValues(alpha: 0.7),
               fontSize: 10,
               fontWeight: FontWeight.w700,
             ),

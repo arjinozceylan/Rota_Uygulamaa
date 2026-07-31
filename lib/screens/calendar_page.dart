@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/calendar_event.dart';
@@ -23,14 +22,11 @@ class _C {
   static const accent = Color(0xFF53D6FF);
   static const accentNav = Color(0xFF1A3A5C);
   static const red = Color(0xFFE53935);
-  static const green = Color(0xFF43A047);
-  static const orange = Color(0xFFFF8F00);
   static const textDark = Color(0xFF1A2236);
   static const textMid = Color(0xFF5A6A85);
   static const textLight = Color(0xFF9DAFC8);
   static const stroke = Color(0xFFE2E8F0);
   static const strokeMid = Color(0xFFCDD5E0);
-  static const today = Color(0xFF1A3A5C);
   static const cardBg = Color(0xFFF7FAFF);
 }
 
@@ -187,13 +183,6 @@ class _CalendarPageState extends State<CalendarPage>
           backgroundColor: _C.accentNav,
         ),
       );
-  }
-
-  int _countForDay(DateTime dayKey) {
-    final m = _planByDay[dayKey];
-    if (m == null) return 0;
-    return (m[ShiftType.morning]?.length ?? 0) +
-        (m[ShiftType.afternoon]?.length ?? 0);
   }
 
   int _countShift(DateTime dayKey, ShiftType shift) =>
@@ -813,24 +802,6 @@ class _CalendarPageState extends State<CalendarPage>
         'Ara',
       ][m];
 
-  String _fullDate(DateTime d) {
-    const months = [
-      '',
-      'Ocak',
-      'Şubat',
-      'Mart',
-      'Nisan',
-      'Mayıs',
-      'Haziran',
-      'Temmuz',
-      'Ağustos',
-      'Eylül',
-      'Ekim',
-      'Kasım',
-      'Aralık',
-    ];
-    return '${d.day} ${months[d.month]} ${d.year}';
-  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -886,7 +857,7 @@ class _TopBar extends StatelessWidget {
               Text(
                 weekLabel,
                 style: TextStyle(
-                  color: Colors.white.withOpacity(0.5),
+                  color: Colors.white.withValues(alpha: 0.5),
                   fontSize: 11.5,
                   fontWeight: FontWeight.w600,
                 ),
@@ -945,7 +916,7 @@ class _TopBar extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.3),
+                        color: Colors.black.withValues(alpha: 0.3),
                         blurRadius: 16,
                         offset: const Offset(0, 6),
                       ),
@@ -992,10 +963,10 @@ class _NavBtn extends StatelessWidget {
         width: 36,
         height: 36,
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.08),
+          color: Colors.white.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(10),
         ),
-        child: Icon(icon, color: Colors.white.withOpacity(0.85), size: 18),
+        child: Icon(icon, color: Colors.white.withValues(alpha: 0.85), size: 18),
       ),
     );
   }
@@ -1116,10 +1087,10 @@ class _AddressPickerControlState extends State<_AddressPickerControl> {
                 decoration: BoxDecoration(
                   color: const Color(0xFF1A2236),
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.white.withOpacity(0.08)),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.22),
+                      color: Colors.black.withValues(alpha: 0.22),
                       blurRadius: 20,
                       offset: const Offset(0, 10),
                     ),
@@ -1143,7 +1114,7 @@ class _AddressPickerControlState extends State<_AddressPickerControl> {
                         itemCount: widget.addresses.length,
                         separatorBuilder: (_, __) => Divider(
                           height: 1,
-                          color: Colors.white.withOpacity(0.06),
+                          color: Colors.white.withValues(alpha: 0.06),
                         ),
                         itemBuilder: (_, i) {
                           final a = widget.addresses[i];
@@ -1219,9 +1190,9 @@ class _AddressPickerControlState extends State<_AddressPickerControl> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 14),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.08),
+              color: Colors.white.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.white.withOpacity(0.14)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
             ),
             child: Row(
               children: [
@@ -1249,7 +1220,7 @@ class _AddressPickerControlState extends State<_AddressPickerControl> {
                 ),
                 Icon(
                   _open ? Icons.expand_less_rounded : Icons.expand_more_rounded,
-                  color: Colors.white.withOpacity(0.6),
+                  color: Colors.white.withValues(alpha: 0.6),
                   size: 18,
                 ),
               ],
@@ -1274,10 +1245,10 @@ class _FloatingAddressChip extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF53D6FF).withOpacity(0.45)),
+        border: Border.all(color: const Color(0xFF53D6FF).withValues(alpha: 0.45)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.14),
+            color: Colors.black.withValues(alpha: 0.14),
             blurRadius: 14,
             offset: const Offset(0, 6),
           ),
@@ -1372,14 +1343,14 @@ class _DayColumn extends StatelessWidget {
         color: _C.surface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: isSelected ? _accent.withOpacity(0.45) : _C.stroke,
+          color: isSelected ? _accent.withValues(alpha: 0.45) : _C.stroke,
           width: isSelected ? 1.5 : 1,
         ),
         boxShadow: [
           BoxShadow(
             color: isSelected
-                ? _accent.withOpacity(0.08)
-                : Colors.black.withOpacity(0.03),
+                ? _accent.withValues(alpha: 0.08)
+                : Colors.black.withValues(alpha: 0.03),
             blurRadius: 16,
             offset: const Offset(0, 4),
           ),
@@ -1393,7 +1364,7 @@ class _DayColumn extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
               decoration: BoxDecoration(
-                color: isToday ? _C.accentNav : _accent.withOpacity(0.04),
+                color: isToday ? _C.accentNav : _accent.withValues(alpha: 0.04),
                 borderRadius: const BorderRadius.vertical(
                   top: Radius.circular(20),
                 ),
@@ -1428,7 +1399,7 @@ class _DayColumn extends StatelessWidget {
                               _turkishDate(day),
                               style: TextStyle(
                                 color: isToday
-                                    ? Colors.white.withOpacity(0.8)
+                                    ? Colors.white.withValues(alpha: 0.8)
                                     : _C.textMid,
                                 fontWeight: FontWeight.w700,
                                 fontSize: 12,
@@ -1452,8 +1423,8 @@ class _DayColumn extends StatelessWidget {
                       value: _total / (maxDaily * 2),
                       minHeight: 4,
                       backgroundColor: isToday
-                          ? Colors.white.withOpacity(0.15)
-                          : _accent.withOpacity(0.12),
+                          ? Colors.white.withValues(alpha: 0.15)
+                          : _accent.withValues(alpha: 0.12),
                       valueColor: AlwaysStoppedAnimation(
                         _total / (maxDaily * 2) > 0.8 ? _C.red : _accent,
                       ),
@@ -1563,9 +1534,9 @@ class _ShiftSection extends StatelessWidget {
           duration: const Duration(milliseconds: 150),
           decoration: BoxDecoration(
             color:
-                isDragOver ? _C.accent.withOpacity(0.04) : Colors.transparent,
+                isDragOver ? _C.accent.withValues(alpha: 0.04) : Colors.transparent,
             border: isDragOver
-                ? Border.all(color: _C.accent.withOpacity(0.4), width: 1.5)
+                ? Border.all(color: _C.accent.withValues(alpha: 0.4), width: 1.5)
                 : null,
           ),
           child: Column(
@@ -1601,7 +1572,7 @@ class _ShiftSection extends StatelessWidget {
                               ),
                               decoration: BoxDecoration(
                                 color: list.length >= maxDaily
-                                    ? _C.red.withOpacity(0.08)
+                                    ? _C.red.withValues(alpha: 0.08)
                                     : _C.stroke,
                                 borderRadius: BorderRadius.circular(6),
                               ),
@@ -1669,7 +1640,7 @@ class _ShiftSection extends StatelessWidget {
                             padding: const EdgeInsets.all(8),
                             itemCount: list.length,
                             buildDefaultDragHandles: false,
-                            onReorder: onReorder,
+                            onReorderItem: onReorder,
                             header: fixedHomeAddress == null
                                 ? null
                                 : Padding(
@@ -1780,7 +1751,7 @@ class _FixedEndpointCard extends StatelessWidget {
             width: 24,
             height: 24,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.12),
+              color: color.withValues(alpha: 0.12),
               shape: BoxShape.circle,
             ),
             child: Icon(icon, size: 13, color: color),
@@ -1842,17 +1813,17 @@ class _FillBadge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: full
-            ? _C.red.withOpacity(0.12)
+            ? _C.red.withValues(alpha: 0.12)
             : dark
-                ? Colors.white.withOpacity(0.12)
-                : color.withOpacity(0.10),
+                ? Colors.white.withValues(alpha: 0.12)
+                : color.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: full
-              ? _C.red.withOpacity(0.4)
+              ? _C.red.withValues(alpha: 0.4)
               : dark
-                  ? Colors.white.withOpacity(0.2)
-                  : color.withOpacity(0.3),
+                  ? Colors.white.withValues(alpha: 0.2)
+                  : color.withValues(alpha: 0.3),
         ),
       ),
       child: Text(
@@ -1913,7 +1884,7 @@ class _TaskCard extends StatelessWidget {
         border: Border.all(color: _C.stroke),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -1945,7 +1916,7 @@ class _TaskCard extends StatelessWidget {
                       width: 20,
                       height: 20,
                       decoration: BoxDecoration(
-                        color: accent.withOpacity(0.12),
+                        color: accent.withValues(alpha: 0.12),
                         shape: BoxShape.circle,
                       ),
                       child: Center(
@@ -1979,7 +1950,7 @@ class _TaskCard extends StatelessWidget {
                         width: 26,
                         height: 26,
                         decoration: BoxDecoration(
-                          color: accent.withOpacity(0.08),
+                          color: accent.withValues(alpha: 0.08),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Icon(
@@ -2018,10 +1989,10 @@ class _TaskCard extends StatelessWidget {
                         vertical: 3,
                       ),
                       decoration: BoxDecoration(
-                        color: _repeatColor().withOpacity(0.10),
+                        color: _repeatColor().withValues(alpha: 0.10),
                         borderRadius: BorderRadius.circular(6),
                         border: Border.all(
-                          color: _repeatColor().withOpacity(0.3),
+                          color: _repeatColor().withValues(alpha: 0.3),
                         ),
                       ),
                       child: Text(
@@ -2069,7 +2040,7 @@ class _TaskCard extends StatelessWidget {
                             borderRadius: BorderRadius.circular(12),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.2),
+                                color: Colors.black.withValues(alpha: 0.2),
                                 blurRadius: 16,
                                 offset: const Offset(0, 6),
                               ),
@@ -2095,7 +2066,7 @@ class _TaskCard extends StatelessWidget {
                           width: 26,
                           height: 26,
                           decoration: BoxDecoration(
-                            color: accent.withOpacity(0.10),
+                            color: accent.withValues(alpha: 0.10),
                             borderRadius: BorderRadius.circular(7),
                           ),
                           child: Icon(
@@ -2109,7 +2080,7 @@ class _TaskCard extends StatelessWidget {
                         width: 26,
                         height: 26,
                         decoration: BoxDecoration(
-                          color: accent.withOpacity(0.10),
+                          color: accent.withValues(alpha: 0.10),
                           borderRadius: BorderRadius.circular(7),
                         ),
                         child: Icon(
@@ -2171,7 +2142,7 @@ class _PlanDialogState extends State<_PlanDialog> {
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.15),
+              color: Colors.black.withValues(alpha: 0.15),
               blurRadius: 40,
               offset: const Offset(0, 16),
             ),
@@ -2197,7 +2168,7 @@ class _PlanDialogState extends State<_PlanDialog> {
                     width: 38,
                     height: 38,
                     decoration: BoxDecoration(
-                      color: _C.accent.withOpacity(0.15),
+                      color: _C.accent.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Icon(
@@ -2226,7 +2197,7 @@ class _PlanDialogState extends State<_PlanDialog> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            color: Colors.white.withOpacity(0.55),
+                            color: Colors.white.withValues(alpha: 0.55),
                             fontSize: 11.5,
                           ),
                         ),

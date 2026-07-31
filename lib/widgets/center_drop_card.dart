@@ -73,7 +73,7 @@ class CenterDropCard extends StatelessWidget {
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(isActive ? 0.06 : 0.04),
+                color: Colors.black.withValues(alpha: isActive ? 0.06 : 0.04),
                 blurRadius: isActive ? 14 : 10,
                 offset: const Offset(0, 6),
               ),
@@ -103,10 +103,10 @@ class CenterDropCard extends StatelessWidget {
                           vertical: 6,
                         ),
                         decoration: BoxDecoration(
-                          color: cs.primary.withOpacity(0.12),
+                          color: cs.primary.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(999),
                           border: Border.all(
-                            color: cs.primary.withOpacity(0.18),
+                            color: cs.primary.withValues(alpha: 0.18),
                           ),
                         ),
                         child: Text(
@@ -234,7 +234,7 @@ class CenterDropCard extends StatelessWidget {
                     'Seçili: ${droppedAddresses.length}/$maxCount',
                     style: TextStyle(
                       fontSize: 12,
-                      color: Colors.black.withOpacity(0.55),
+                      color: Colors.black.withValues(alpha: 0.55),
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -243,7 +243,7 @@ class CenterDropCard extends StatelessWidget {
                     'Toplam süreye göre optimize edilecek',
                     style: TextStyle(
                       fontSize: 12,
-                      color: Colors.black.withOpacity(0.45),
+                      color: Colors.black.withValues(alpha: 0.45),
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -306,10 +306,10 @@ class CenterDropCard extends StatelessWidget {
                                 size: 18,
                                 color: cs.primary,
                               ),
-                              backgroundColor: cs.primary.withOpacity(0.08),
+                              backgroundColor: cs.primary.withValues(alpha: 0.08),
                               shape: StadiumBorder(
                                 side: BorderSide(
-                                  color: cs.primary.withOpacity(0.18),
+                                  color: cs.primary.withValues(alpha: 0.18),
                                 ),
                               ),
                             );
@@ -368,9 +368,9 @@ class _SearchBox extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
             decoration: BoxDecoration(
-              color: cs.primary.withOpacity(0.10),
+              color: cs.primary.withValues(alpha: 0.10),
               borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: cs.primary.withOpacity(0.18)),
+              border: Border.all(color: cs.primary.withValues(alpha: 0.18)),
             ),
             child: Text(
               'Google',

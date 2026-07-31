@@ -211,9 +211,9 @@ class _SavedRoutesPageState extends State<SavedRoutesPage> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: _accent.withOpacity(0.10),
+                    color: _accent.withValues(alpha: 0.10),
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: _accent.withOpacity(0.25)),
+                    border: Border.all(color: _accent.withValues(alpha: 0.25)),
                   ),
                   child: Text(
                     '${_routes.length} rota',
@@ -234,9 +234,9 @@ class _SavedRoutesPageState extends State<SavedRoutesPage> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFFF3E0).withOpacity(0.08),
+                    color: const Color(0xFFFFF3E0).withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                    border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
                   ),
                   child: Row(
                     children: [
@@ -299,7 +299,7 @@ class _SavedRoutesPageState extends State<SavedRoutesPage> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(Icons.route_rounded,
-              size: 56, color: _textLight.withOpacity(0.4)),
+              size: 56, color: _textLight.withValues(alpha: 0.4)),
           const SizedBox(height: 16),
           const Text(
             'Henüz rota oluşturulmadı',
@@ -388,7 +388,7 @@ class _RouteCardState extends State<_RouteCard> {
                     width: 36,
                     height: 36,
                     decoration: BoxDecoration(
-                      color: _accent.withOpacity(0.15),
+                      color: _accent.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Center(
@@ -419,7 +419,7 @@ class _RouteCardState extends State<_RouteCard> {
                         Text(
                           widget.fmtDate(r.createdAt),
                           style: TextStyle(
-                            color: Colors.white.withOpacity(0.45),
+                            color: Colors.white.withValues(alpha: 0.45),
                             fontSize: 11.5,
                           ),
                         ),
@@ -449,7 +449,7 @@ class _RouteCardState extends State<_RouteCard> {
                     duration: const Duration(milliseconds: 200),
                     child: Icon(
                       Icons.keyboard_arrow_down_rounded,
-                      color: Colors.white.withOpacity(0.5),
+                      color: Colors.white.withValues(alpha: 0.5),
                       size: 20,
                     ),
                   ),
@@ -513,10 +513,10 @@ class _RouteCardState extends State<_RouteCard> {
                                 width: 28,
                                 height: 28,
                                 decoration: BoxDecoration(
-                                  color: dotColor.withOpacity(0.12),
+                                  color: dotColor.withValues(alpha: 0.12),
                                   shape: BoxShape.circle,
                                   border: Border.all(
-                                    color: dotColor.withOpacity(0.4),
+                                    color: dotColor.withValues(alpha: 0.4),
                                   ),
                                 ),
                                 child: Icon(dotIcon, size: 14, color: dotColor),
@@ -545,7 +545,7 @@ class _RouteCardState extends State<_RouteCard> {
                                         vertical: 2,
                                       ),
                                       decoration: BoxDecoration(
-                                        color: dotColor.withOpacity(0.1),
+                                        color: dotColor.withValues(alpha: 0.1),
                                         borderRadius: BorderRadius.circular(6),
                                       ),
                                       child: Text(
@@ -569,7 +569,7 @@ class _RouteCardState extends State<_RouteCard> {
                                           vertical: 2,
                                         ),
                                         decoration: BoxDecoration(
-                                          color: _green.withOpacity(0.12),
+                                          color: _green.withValues(alpha: 0.12),
                                           borderRadius:
                                               BorderRadius.circular(6),
                                         ),
@@ -627,9 +627,9 @@ class _StatChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.2)),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

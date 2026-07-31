@@ -62,27 +62,27 @@ class MyApp extends StatelessWidget {
         ),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
-          fillColor: const Color(0xFF141B26).withOpacity(0.85),
+          fillColor: const Color(0xFF141B26).withValues(alpha: 0.85),
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 14,
             vertical: 14,
           ),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide(color: Colors.white.withOpacity(0.08)),
+            borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide(color: Colors.white.withOpacity(0.10)),
+            borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.10)),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
             borderSide: const BorderSide(color: accent, width: 1.6),
           ),
-          labelStyle: TextStyle(color: Colors.white.withOpacity(0.72)),
-          hintStyle: TextStyle(color: Colors.white.withOpacity(0.40)),
-          prefixIconColor: Colors.white.withOpacity(0.70),
-          suffixIconColor: Colors.white.withOpacity(0.70),
+          labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.72)),
+          hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.40)),
+          prefixIconColor: Colors.white.withValues(alpha: 0.70),
+          suffixIconColor: Colors.white.withValues(alpha: 0.70),
         ),
       ),
     );

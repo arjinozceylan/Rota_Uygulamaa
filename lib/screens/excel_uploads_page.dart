@@ -10,8 +10,6 @@ class ExcelUploadsPage extends StatefulWidget {
 
 class _ExcelUploadsPageState extends State<ExcelUploadsPage> {
   static const _bg = Color(0xFF0B1018);
-  static const _surface = Color(0xFF141B26);
-  static const _stroke = Color(0xFF1E2A3A);
   static const _accent = Color(0xFF53D6FF);
   static const _textLight = Color(0xFF6B7A8D);
   static const _textDark = Color(0xFFE8EDF3);
@@ -44,9 +42,9 @@ class _ExcelUploadsPageState extends State<ExcelUploadsPage> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: _accent.withOpacity(0.10),
+                    color: _accent.withValues(alpha: 0.10),
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: _accent.withOpacity(0.25)),
+                    border: Border.all(color: _accent.withValues(alpha: 0.25)),
                   ),
                   child: Text(
                     '${files.length} dosya',
@@ -85,7 +83,7 @@ class _ExcelUploadsPageState extends State<ExcelUploadsPage> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.upload_file_rounded, size: 56, color: _textLight.withOpacity(0.4)),
+          Icon(Icons.upload_file_rounded, size: 56, color: _textLight.withValues(alpha: 0.4)),
           const SizedBox(height: 16),
           const Text(
             'Henüz yüklenen dosya yok',
@@ -141,9 +139,9 @@ class _FileCard extends StatelessWidget {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: _accent.withOpacity(0.08),
+              color: _accent.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: _accent.withOpacity(0.18)),
+              border: Border.all(color: _accent.withValues(alpha: 0.18)),
             ),
             child: const Icon(Icons.table_chart_rounded, color: _accent, size: 22),
           ),
@@ -174,9 +172,9 @@ class _FileCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
-              color: const Color(0xFF1A3A2A).withOpacity(0.5),
+              color: const Color(0xFF1A3A2A).withValues(alpha: 0.5),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: const Color(0xFF2ECC71).withOpacity(0.25)),
+              border: Border.all(color: const Color(0xFF2ECC71).withValues(alpha: 0.25)),
             ),
             child: Text(
               '${file.addressCount} adres',

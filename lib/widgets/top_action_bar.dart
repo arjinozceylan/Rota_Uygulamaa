@@ -44,7 +44,7 @@ class TopActionBar extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.95),
+        color: Colors.white.withValues(alpha: 0.95),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: Colors.black12),
         boxShadow: const [
@@ -140,9 +140,9 @@ class _Pill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.10),
+        color: color.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withOpacity(0.20)),
+        border: Border.all(color: color.withValues(alpha: 0.20)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -202,9 +202,9 @@ class _ActionIconButtonState extends State<_ActionIconButton> {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: c.withOpacity(_hover ? 0.18 : 0.12),
+              color: c.withValues(alpha: _hover ? 0.18 : 0.12),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: c.withOpacity(_hover ? 0.35 : 0.25)),
+              border: Border.all(color: c.withValues(alpha: _hover ? 0.35 : 0.25)),
               boxShadow: _hover
                   ? const [
                       BoxShadow(
