@@ -7,6 +7,7 @@ import 'screens/saved_routes_page.dart';
 import 'screens/excel_uploads_page.dart';
 import 'screens/help_page.dart';
 import 'screens/calendar_page.dart';
+import 'screens/calendar_month_overview.dart';
 import 'screens/login_page.dart';
 
 final GoRouter router = GoRouter(
@@ -40,8 +41,26 @@ final GoRouter router = GoRouter(
     GoRoute(
       path: '/calendar',
       builder: (context, state) {
-        final fixedHomeAddress = state.extra as Address?;
-        return CalendarPage(fixedHomeAddress: fixedHomeAddress);
+        // `extra` doesn't survive a browser refresh/history restore on web —
+        // guard the cast instead of trusting it's always an Address.
+        final extra = state.extra;
+        final fixedHomeAddress = extra is Address ? extra : null;
+        return CalendarMonthOverview(fixedHomeAddress: fixedHomeAddress);
+      },
+    ),
+    GoRoute(
+      path: '/calendar/day',
+      builder: (context, state) {
+        final extra = state.extra;
+        if (extra is! CalendarDayRouteArgs) {
+          // No valid day was passed (e.g. stale browser history state) —
+          // fall back to the month view instead of crashing.
+          return const CalendarMonthOverview();
+        }
+        return CalendarPage(
+          fixedHomeAddress: extra.fixedHomeAddress,
+          initialDay: extra.day,
+        );
       },
     ),
     GoRoute(

@@ -54,6 +54,13 @@ extension ShiftLabel on ShiftType {
   Color get bg => const Color(0xFFF7FAFF);
 }
 
+/// Aylık genel bakıştan tek gün detayına geçerken taşınan parametreler.
+class CalendarDayRouteArgs {
+  const CalendarDayRouteArgs({required this.day, this.fixedHomeAddress});
+  final DateTime day;
+  final Address? fixedHomeAddress;
+}
+
 class _MovePayload {
   final DateTime fromDay;
   final int fromIndex;
@@ -71,11 +78,20 @@ class _MovePayload {
 // CALENDAR PAGE
 // ─────────────────────────────────────────────────────────────────────────────
 class CalendarPage extends StatefulWidget {
-  const CalendarPage({super.key, this.onSendToRoute, this.fixedHomeAddress});
+  const CalendarPage({
+    super.key,
+    this.onSendToRoute,
+    this.fixedHomeAddress,
+    this.initialDay,
+  });
 
   /// Seçili gündeki adresleri rota paneline gönderir
   final void Function(List<String> addresses)? onSendToRoute;
   final Address? fixedHomeAddress;
+
+  /// Aylık genel bakıştan gelindiğinde gösterilecek tek gün.
+  /// Belirtilmezse bugün gösterilir.
+  final DateTime? initialDay;
 
   @override
   State<CalendarPage> createState() => _CalendarPageState();
@@ -87,13 +103,11 @@ class _CalendarPageState extends State<CalendarPage>
   static const int repeatHorizonDays = 730;
 
   List<Address> get addresses => AddressStore.items;
-  Address? selectedAddress;
 
-  late DateTime weekStart;
   late DateTime selectedDay;
   final OsrmRouteService _osrm = const OsrmRouteService();
   final TspOptimizerService _tsp = const TspOptimizerService();
-  // animasyon — hafta geçişi
+  // animasyon — sayfa girişi
   late AnimationController _weekCtrl;
   late Animation<double> _weekFade;
   FleetState get _fleetState => context.read<FleetState>();
@@ -110,9 +124,7 @@ class _CalendarPageState extends State<CalendarPage>
   @override
   void initState() {
     super.initState();
-    final now = DateTime.now();
-    weekStart = _startOfWeek(now);
-    selectedDay = _dateOnly(now);
+    selectedDay = _dateOnly(widget.initialDay ?? DateTime.now());
 
     _weekCtrl = AnimationController(
       vsync: this,
@@ -136,11 +148,6 @@ class _CalendarPageState extends State<CalendarPage>
   bool _sameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
   bool _isToday(DateTime d) => _sameDay(d, DateTime.now());
-
-  DateTime _startOfWeek(DateTime d) {
-    final only = _dateOnly(d);
-    return only.subtract(Duration(days: only.weekday - DateTime.monday));
-  }
 
   String _newSeriesId(String title) =>
       '${DateTime.now().microsecondsSinceEpoch}-${title.hashCode}';
@@ -191,12 +198,6 @@ class _CalendarPageState extends State<CalendarPage>
   List<VisitPlanItem> _listForShift(DateTime dayKey, ShiftType shift) {
     final dayMap = _planByDay.putIfAbsent(dayKey, () => {});
     return dayMap.putIfAbsent(shift, () => <VisitPlanItem>[]);
-  }
-
-  void _changeWeek(int direction) {
-    _weekCtrl.reset();
-    setState(() => weekStart = weekStart.add(Duration(days: 7 * direction)));
-    _weekCtrl.forward();
   }
 
   // ── Series ops (orijinalden değişmedi) ───────────────────────────────────
@@ -624,23 +625,25 @@ class _CalendarPageState extends State<CalendarPage>
     }
   }
 
+  static const _weekdaysFull = [
+    'Pazartesi',
+    'Salı',
+    'Çarşamba',
+    'Perşembe',
+    'Cuma',
+    'Cumartesi',
+    'Pazar',
+  ];
+
   // ── BUILD ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     context.watch<FleetState>();
-    final days = List<DateTime>.generate(
-      7,
-      (i) => weekStart.add(Duration(days: i)),
-    );
-    if (selectedAddress != null &&
-        !addresses.any((a) => a.code == selectedAddress!.code)) {
-      selectedAddress = null;
-    }
+    final days = [selectedDay];
 
-    // Hafta aralığı metni
-    final wEnd = weekStart.add(const Duration(days: 6));
-    final weekLabel =
-        '${weekStart.day} ${_monthShort(weekStart.month)} — ${wEnd.day} ${_monthShort(wEnd.month)} ${wEnd.year}';
+    final dayLabel =
+        '${selectedDay.day} ${_monthShort(selectedDay.month)} ${selectedDay.year}, '
+        '${_weekdaysFull[selectedDay.weekday - 1]}';
 
     return Scaffold(
       backgroundColor: _C.bg,
@@ -682,14 +685,9 @@ class _CalendarPageState extends State<CalendarPage>
 
           // ── Top Bar ─────────────────────────────────────────────────────
           _TopBar(
-            weekLabel: weekLabel,
-            addresses: addresses,
-            selectedAddress: selectedAddress,
+            dayLabel: dayLabel,
             selectedDay: selectedDay,
             onBack: () => Navigator.of(context).maybePop(),
-            onPrevWeek: () => _changeWeek(-1),
-            onNextWeek: () => _changeWeek(1),
-            onAddressChanged: (v) => setState(() => selectedAddress = v),
             onSendToRoute: widget.onSendToRoute == null
                 ? null
                 : () {
@@ -708,7 +706,17 @@ class _CalendarPageState extends State<CalendarPage>
                   },
           ),
 
-          // ── Haftalık kolonlar ────────────────────────────────────────────
+          // ── Adres ekleme paneli ─────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: _AddAddressPanel(
+              addresses: addresses,
+              onAdd: (address, shift) =>
+                  _handleDropAddress(address, selectedDay, shift),
+            ),
+          ),
+
+          // ── Gün detayı ────────────────────────────────────────────────────
           Expanded(
             child: FadeTransition(
               opacity: _weekFade,
@@ -717,54 +725,57 @@ class _CalendarPageState extends State<CalendarPage>
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: days.asMap().entries.map((entry) {
-                    final i = entry.key;
-                    final day = entry.value;
-                    final dayKey = _dateOnly(day);
-                    final isSel = _sameDay(dayKey, selectedDay);
-                    final isToday = _isToday(day);
+                  children: days.map((day) {
+                        final dayKey = _dateOnly(day);
+                        final isSel = _sameDay(dayKey, selectedDay);
+                        final isToday = _isToday(day);
 
-                    final morningList = _planByDay[dayKey]
-                            ?[ShiftType.morning] ??
-                        <VisitPlanItem>[];
-                    final afternoonList = _planByDay[dayKey]
-                            ?[ShiftType.afternoon] ??
-                        <VisitPlanItem>[];
-                    return _DayColumn(
-                      day: day,
-                      dayKey: dayKey,
-                      dayIndex: i,
-                      morningList: morningList,
-                      afternoonList: afternoonList,
-                      isSelected: isSel,
-                      isToday: isToday,
-                      maxDaily: maxDaily,
-                      fixedHomeAddress: _fixedHomeAddress,
-                      onTapHeader: () => setState(() => selectedDay = dayKey),
-                      onAcceptDrop: (data, shift) {
-                        if (data is Address) {
-                          _handleDropAddress(data, dayKey, shift);
-                        }
-                        if (data is _MovePayload) {
-                          setState(() => _moveItemToDay(data, dayKey, shift));
-                        }
-                      },
-                      onEditItem: (shift, idx) => _editItem(dayKey, shift, idx),
-                      onReorder: (shift, o, n) =>
-                          _reorderWithinShift(dayKey, shift, o, n),
-                      buildMovePayload: (shift, idx) {
-                        final list = shift == ShiftType.morning
-                            ? morningList
-                            : afternoonList;
-                        return _MovePayload(
-                          fromDay: dayKey,
-                          fromIndex: idx,
-                          item: list[idx],
-                          shift: shift,
+                        final morningList = _planByDay[dayKey]
+                                ?[ShiftType.morning] ??
+                            <VisitPlanItem>[];
+                        final afternoonList = _planByDay[dayKey]
+                                ?[ShiftType.afternoon] ??
+                            <VisitPlanItem>[];
+                        return _DayColumn(
+                          day: day,
+                          dayKey: dayKey,
+                          dayIndex: day.weekday - 1,
+                          morningList: morningList,
+                          afternoonList: afternoonList,
+                          isSelected: isSel,
+                          isToday: isToday,
+                          maxDaily: maxDaily,
+                          width: 480,
+                          fixedHomeAddress: _fixedHomeAddress,
+                          onTapHeader: () =>
+                              setState(() => selectedDay = dayKey),
+                          onAcceptDrop: (data, shift) {
+                            if (data is Address) {
+                              _handleDropAddress(data, dayKey, shift);
+                            }
+                            if (data is _MovePayload) {
+                              setState(
+                                () => _moveItemToDay(data, dayKey, shift),
+                              );
+                            }
+                          },
+                          onEditItem: (shift, idx) =>
+                              _editItem(dayKey, shift, idx),
+                          onReorder: (shift, o, n) =>
+                              _reorderWithinShift(dayKey, shift, o, n),
+                          buildMovePayload: (shift, idx) {
+                            final list = shift == ShiftType.morning
+                                ? morningList
+                                : afternoonList;
+                            return _MovePayload(
+                              fromDay: dayKey,
+                              fromIndex: idx,
+                              item: list[idx],
+                              shift: shift,
+                            );
+                          },
                         );
-                      },
-                    );
-                  }).toList(),
+                      }).toList(),
                 ),
               ),
             ),
@@ -809,23 +820,15 @@ class _CalendarPageState extends State<CalendarPage>
 // ─────────────────────────────────────────────────────────────────────────────
 class _TopBar extends StatelessWidget {
   const _TopBar({
-    required this.weekLabel,
-    required this.addresses,
-    required this.selectedAddress,
+    required this.dayLabel,
     required this.selectedDay,
     required this.onBack,
-    required this.onPrevWeek,
-    required this.onNextWeek,
-    required this.onAddressChanged,
     this.onSendToRoute,
   });
 
-  final String weekLabel;
-  final List<Address> addresses;
-  final Address? selectedAddress;
+  final String dayLabel;
   final DateTime selectedDay;
-  final VoidCallback onBack, onPrevWeek, onNextWeek;
-  final ValueChanged<Address?> onAddressChanged;
+  final VoidCallback onBack;
   final VoidCallback? onSendToRoute;
 
   @override
@@ -835,19 +838,16 @@ class _TopBar extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       child: Row(
         children: [
-          // Geri
-
-          // Hafta navigasyonu
-          _NavBtn(icon: Icons.chevron_left_rounded, onTap: onPrevWeek),
-          _NavBtn(icon: Icons.chevron_right_rounded, onTap: onNextWeek),
+          // Aylık genel bakışa geri dön
+          _NavBtn(icon: Icons.arrow_back_rounded, onTap: onBack),
           const SizedBox(width: 12),
 
-          // Hafta etiketi
+          // Gün etiketi
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Haftalık Takvim',
+                'Gün Detayı',
                 style: TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w900,
@@ -855,7 +855,7 @@ class _TopBar extends StatelessWidget {
                 ),
               ),
               Text(
-                weekLabel,
+                dayLabel,
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.5),
                   fontSize: 11.5,
@@ -891,58 +891,6 @@ class _TopBar extends StatelessWidget {
             ),
             const SizedBox(width: 12),
           ],
-
-          // Adres seçici (açılan listeden doğrudan sürüklenebilir)
-          _AddressPickerControl(
-            addresses: addresses,
-            selectedAddress: selectedAddress,
-            onChanged: onAddressChanged,
-          ),
-
-          // Sürüklenebilir adres kapsülü
-          if (selectedAddress != null) ...[
-            const SizedBox(width: 10),
-            Draggable<Object>(
-              data: selectedAddress!,
-              feedback: Material(
-                color: Colors.transparent,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    color: _C.accentNav,
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.3),
-                        blurRadius: 16,
-                        offset: const Offset(0, 6),
-                      ),
-                    ],
-                  ),
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 240),
-                    child: Text(
-                      selectedAddress!.address,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              childWhenDragging: Opacity(
-                opacity: 0.5,
-                child: _DragPill(label: selectedAddress!.address),
-              ),
-              child: _DragPill(label: selectedAddress!.address),
-            ),
-          ],
         ],
       ),
     );
@@ -972,310 +920,194 @@ class _NavBtn extends StatelessWidget {
   }
 }
 
-class _DragPill extends StatelessWidget {
-  const _DragPill({required this.label});
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF53D6FF), Color(0xFF3DBFDB)],
-        ),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(
-            Icons.drag_indicator_rounded,
-            size: 14,
-            color: Colors.white,
-          ),
-          const SizedBox(width: 6),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 160),
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w800,
-                fontSize: 12.5,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AddressPickerControl extends StatefulWidget {
-  const _AddressPickerControl({
-    required this.addresses,
-    required this.selectedAddress,
-    required this.onChanged,
-  });
+// ─────────────────────────────────────────────────────────────────────────────
+// ADRES EKLEME PANELİ — arama (adres metni veya kod) ile güne adres ekleme
+// ─────────────────────────────────────────────────────────────────────────────
+class _AddAddressPanel extends StatefulWidget {
+  const _AddAddressPanel({required this.addresses, required this.onAdd});
 
   final List<Address> addresses;
-  final Address? selectedAddress;
-  final ValueChanged<Address?> onChanged;
+  final void Function(Address address, ShiftType shift) onAdd;
 
   @override
-  State<_AddressPickerControl> createState() => _AddressPickerControlState();
+  State<_AddAddressPanel> createState() => _AddAddressPanelState();
 }
 
-class _AddressPickerControlState extends State<_AddressPickerControl> {
-  final LayerLink _layerLink = LayerLink();
-  OverlayEntry? _overlayEntry;
-  bool _open = false;
+class _AddAddressPanelState extends State<_AddAddressPanel> {
+  final _ctrl = TextEditingController();
+  String _query = '';
 
   @override
   void dispose() {
-    _removeOverlay(skipSetState: true);
+    _ctrl.dispose();
     super.dispose();
   }
 
-  void _toggleOverlay() {
-    if (_open) {
-      _removeOverlay();
-    } else {
-      _showOverlay();
-    }
+  List<Address> get _results {
+    final q = _query.trim().toLowerCase();
+    if (q.isEmpty) return const [];
+    return widget.addresses
+        .where(
+          (a) =>
+              a.address.toLowerCase().contains(q) ||
+              a.code.toLowerCase().contains(q),
+        )
+        .take(6)
+        .toList();
   }
 
-  void _showOverlay() {
-    _overlayEntry = _buildOverlay();
-    Overlay.of(context).insert(_overlayEntry!);
-    setState(() => _open = true);
-  }
-
-  void _removeOverlay({bool skipSetState = false}) {
-    _overlayEntry?.remove();
-    _overlayEntry = null;
-    if (skipSetState) {
-      _open = false;
-      return;
-    }
-    if (mounted) setState(() => _open = false);
-  }
-
-  OverlayEntry _buildOverlay() {
-    return OverlayEntry(
-      builder: (context) => Stack(
+  @override
+  Widget build(BuildContext context) {
+    final results = _results;
+    return Container(
+      decoration: BoxDecoration(
+        color: _C.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _C.stroke),
+      ),
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Positioned.fill(
-            child: GestureDetector(
-              behavior: HitTestBehavior.translucent,
-              onTap: _removeOverlay,
-              child: const SizedBox.expand(),
-            ),
-          ),
-          CompositedTransformFollower(
-            link: _layerLink,
-            showWhenUnlinked: false,
-            offset: const Offset(0, 46),
-            child: Material(
-              color: Colors.transparent,
-              child: Container(
-                width: 260,
-                constraints: const BoxConstraints(maxHeight: 260),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1A2236),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.22),
-                      blurRadius: 20,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
+          Row(
+            children: [
+              const Icon(Icons.search_rounded, size: 18, color: _C.textLight),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextField(
+                  controller: _ctrl,
+                  onChanged: (v) => setState(() => _query = v),
+                  decoration: const InputDecoration(
+                    hintText: 'Adres veya adres kodu ara...',
+                    border: InputBorder.none,
+                    filled: false,
+                    isDense: true,
+                    hintStyle: TextStyle(color: _C.textLight, fontSize: 13),
+                  ),
+                  style: const TextStyle(
+                    color: _C.textDark,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-                child: widget.addresses.isEmpty
-                    ? const Padding(
-                        padding: EdgeInsets.all(14),
+              ),
+              if (_query.isNotEmpty)
+                InkWell(
+                  onTap: () => setState(() {
+                    _ctrl.clear();
+                    _query = '';
+                  }),
+                  borderRadius: BorderRadius.circular(8),
+                  child: const Padding(
+                    padding: EdgeInsets.all(4),
+                    child: Icon(
+                      Icons.close_rounded,
+                      size: 16,
+                      color: _C.textLight,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          if (_query.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            if (results.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 6),
+                child: Text(
+                  'Eşleşen adres bulunamadı.',
+                  style: TextStyle(color: _C.textLight, fontSize: 12),
+                ),
+              )
+            else
+              ...results.map(
+                (a) => Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: _C.accent.withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
                         child: Text(
-                          'Adres bulunamadı',
-                          style: TextStyle(
-                            color: Color(0xFF9DAFC8),
+                          a.code,
+                          style: const TextStyle(
+                            color: _C.accentNav,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          a.address,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: _C.textDark,
                             fontSize: 12.5,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                      )
-                    : ListView.separated(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        shrinkWrap: true,
-                        itemCount: widget.addresses.length,
-                        separatorBuilder: (_, __) => Divider(
-                          height: 1,
-                          color: Colors.white.withValues(alpha: 0.06),
-                        ),
-                        itemBuilder: (_, i) {
-                          final a = widget.addresses[i];
-
-                          final row = InkWell(
-                            onTap: () {
-                              widget.onChanged(a);
-                              _removeOverlay();
-                            },
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 12,
-                              ),
-                              child: Row(
-                                children: [
-                                  const Icon(
-                                    Icons.place_outlined,
-                                    size: 15,
-                                    color: Color(0xFF9DAFC8),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      a.address,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                        height: 1.3,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-
-                          return Draggable<Object>(
-                            data: a,
-                            feedback: Material(
-                              color: Colors.transparent,
-                              child: _FloatingAddressChip(text: a.address),
-                            ),
-                            childWhenDragging: Opacity(
-                              opacity: 0.35,
-                              child: row,
-                            ),
-                            child: row,
-                          );
-                        },
                       ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return CompositedTransformTarget(
-      link: _layerLink,
-      child: SizedBox(
-        width: 260,
-        height: 40,
-        child: InkWell(
-          onTap: _toggleOverlay,
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
-            ),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.place_outlined,
-                  size: 15,
-                  color: Color(0xFF9DAFC8),
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    widget.selectedAddress?.address ?? 'Adres Seç',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: widget.selectedAddress == null
-                          ? const Color(0xFF9DAFC8)
-                          : Colors.white,
-                      fontSize: 13,
-                      fontWeight: widget.selectedAddress == null
-                          ? FontWeight.w500
-                          : FontWeight.w700,
-                    ),
+                      const SizedBox(width: 6),
+                      _AddShiftButton(
+                        label: 'Sabah',
+                        onTap: () => widget.onAdd(a, ShiftType.morning),
+                      ),
+                      const SizedBox(width: 6),
+                      _AddShiftButton(
+                        label: 'ÖS',
+                        onTap: () => widget.onAdd(a, ShiftType.afternoon),
+                      ),
+                    ],
                   ),
                 ),
-                Icon(
-                  _open ? Icons.expand_less_rounded : Icons.expand_more_rounded,
-                  color: Colors.white.withValues(alpha: 0.6),
-                  size: 18,
-                ),
-              ],
-            ),
-          ),
-        ),
+              ),
+          ],
+        ],
       ),
     );
   }
 }
 
-class _FloatingAddressChip extends StatelessWidget {
-  const _FloatingAddressChip({required this.text});
-
-  final String text;
+class _AddShiftButton extends StatelessWidget {
+  const _AddShiftButton({required this.label, required this.onTap});
+  final String label;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      constraints: const BoxConstraints(maxWidth: 260),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF53D6FF).withValues(alpha: 0.45)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.14),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(
-            Icons.location_on_rounded,
-            size: 16,
-            color: Color(0xFF53D6FF),
-          ),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Text(
-              text,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        decoration: BoxDecoration(
+          color: _C.accentNav,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.add_rounded, size: 12, color: Colors.white),
+            const SizedBox(width: 2),
+            Text(
+              label,
               style: const TextStyle(
-                fontSize: 12.5,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF1A2236),
+                color: Colors.white,
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1300,6 +1132,7 @@ class _DayColumn extends StatelessWidget {
     required this.onEditItem,
     required this.onReorder,
     required this.buildMovePayload,
+    this.width = 210,
   });
 
   final DateTime day, dayKey;
@@ -1307,6 +1140,7 @@ class _DayColumn extends StatelessWidget {
   final List<VisitPlanItem> morningList, afternoonList;
   final bool isSelected, isToday;
   final int maxDaily;
+  final double width;
   final Address? fixedHomeAddress;
   final VoidCallback onTapHeader;
   final void Function(Object, ShiftType) onAcceptDrop;
@@ -1337,7 +1171,7 @@ class _DayColumn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 210,
+      width: width,
       margin: const EdgeInsets.only(right: 10),
       decoration: BoxDecoration(
         color: _C.surface,
@@ -1861,6 +1695,13 @@ class _TaskCard extends StatelessWidget {
   final VoidCallback onEdit;
   final _MovePayload movePayload;
 
+  String? get _code {
+    for (final a in AddressStore.items) {
+      if (a.address == item.title) return a.code;
+    }
+    return null;
+  }
+
   Color _repeatColor() {
     switch (item.repeat) {
       case RepeatType.daily:
@@ -1877,7 +1718,7 @@ class _TaskCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
+      margin: const EdgeInsets.only(bottom: 6),
       decoration: BoxDecoration(
         color: _C.cardBg,
         borderRadius: BorderRadius.circular(14),
@@ -1904,17 +1745,19 @@ class _TaskCard extends StatelessWidget {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
+            padding: const EdgeInsets.fromLTRB(8, 8, 8, 6),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Başlık + düzenle
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Sıra numarası
                     Container(
-                      width: 20,
-                      height: 20,
+                      width: 18,
+                      height: 18,
+                      margin: const EdgeInsets.only(top: 1),
                       decoration: BoxDecoration(
                         color: accent.withValues(alpha: 0.12),
                         shape: BoxShape.circle,
@@ -1924,38 +1767,65 @@ class _TaskCard extends StatelessWidget {
                           '${index + 1}',
                           style: TextStyle(
                             color: accent,
-                            fontSize: 10,
+                            fontSize: 9,
                             fontWeight: FontWeight.w900,
                           ),
                         ),
                       ),
                     ),
-                    const SizedBox(width: 7),
+                    const SizedBox(width: 6),
                     Expanded(
-                      child: Text(
-                        item.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: _C.textDark,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 12.5,
-                          height: 1.3,
-                        ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (_code != null) ...[
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 5,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: _C.accent.withValues(alpha: 0.14),
+                                borderRadius: BorderRadius.circular(5),
+                              ),
+                              child: Text(
+                                _code!,
+                                style: const TextStyle(
+                                  color: _C.accentNav,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                          ],
+                          Text(
+                            item.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: _C.textDark,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 12,
+                              height: 1.25,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
+                    const SizedBox(width: 4),
                     GestureDetector(
                       onTap: onEdit,
                       child: Container(
-                        width: 26,
-                        height: 26,
+                        width: 22,
+                        height: 22,
                         decoration: BoxDecoration(
                           color: accent.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(7),
                         ),
                         child: Icon(
                           Icons.edit_rounded,
-                          size: 13,
+                          size: 12,
                           color: accent,
                         ),
                       ),
@@ -1977,7 +1847,7 @@ class _TaskCard extends StatelessWidget {
                   ),
                 ],
 
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
 
                 // Alt satır — tekrar rozeti + taşı + sırala
                 Row(
@@ -1985,12 +1855,12 @@ class _TaskCard extends StatelessWidget {
                     // Tekrar rozeti
                     Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 7,
-                        vertical: 3,
+                        horizontal: 6,
+                        vertical: 2,
                       ),
                       decoration: BoxDecoration(
                         color: _repeatColor().withValues(alpha: 0.10),
-                        borderRadius: BorderRadius.circular(6),
+                        borderRadius: BorderRadius.circular(5),
                         border: Border.all(
                           color: _repeatColor().withValues(alpha: 0.3),
                         ),
@@ -1999,7 +1869,7 @@ class _TaskCard extends StatelessWidget {
                         item.repeat.short,
                         style: TextStyle(
                           color: _repeatColor(),
-                          fontSize: 10,
+                          fontSize: 9,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
@@ -2010,20 +1880,20 @@ class _TaskCard extends StatelessWidget {
                     ReorderableDragStartListener(
                       index: index,
                       child: Container(
-                        width: 26,
-                        height: 26,
+                        width: 22,
+                        height: 22,
                         decoration: BoxDecoration(
                           color: _C.stroke,
-                          borderRadius: BorderRadius.circular(7),
+                          borderRadius: BorderRadius.circular(6),
                         ),
                         child: const Icon(
                           Icons.drag_handle_rounded,
-                          size: 14,
+                          size: 13,
                           color: _C.textLight,
                         ),
                       ),
                     ),
-                    const SizedBox(width: 6),
+                    const SizedBox(width: 5),
 
                     // Gün arası sürükle
                     Draggable<Object>(
@@ -2063,29 +1933,29 @@ class _TaskCard extends StatelessWidget {
                       childWhenDragging: Opacity(
                         opacity: 0.4,
                         child: Container(
-                          width: 26,
-                          height: 26,
+                          width: 22,
+                          height: 22,
                           decoration: BoxDecoration(
                             color: accent.withValues(alpha: 0.10),
-                            borderRadius: BorderRadius.circular(7),
+                            borderRadius: BorderRadius.circular(6),
                           ),
                           child: Icon(
                             Icons.swap_horiz_rounded,
-                            size: 14,
+                            size: 13,
                             color: accent,
                           ),
                         ),
                       ),
                       child: Container(
-                        width: 26,
-                        height: 26,
+                        width: 22,
+                        height: 22,
                         decoration: BoxDecoration(
                           color: accent.withValues(alpha: 0.10),
-                          borderRadius: BorderRadius.circular(7),
+                          borderRadius: BorderRadius.circular(6),
                         ),
                         child: Icon(
                           Icons.swap_horiz_rounded,
-                          size: 14,
+                          size: 13,
                           color: accent,
                         ),
                       ),
