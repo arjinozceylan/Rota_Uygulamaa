@@ -111,6 +111,13 @@ class _SavedRoutesPageState extends State<SavedRoutesPage> {
       return _StopView(address: addr, completed: completed);
     }).toList();
 
+    // İlk durak (order: 1), rotanın başlangıç noktası — sürücü zaten
+    // hastanede/başlangıçta olduğu için otomatik tamamlanmış sayılır,
+    // ayrıca elle işaretlenmesi gerekmez.
+    if (stops.isNotEmpty) {
+      stops[0] = _StopView(address: stops[0].address, completed: true);
+    }
+
     final createdAtRaw = route['created_at']?.toString();
     final createdAt = DateTime.tryParse(createdAtRaw ?? '') ?? DateTime.now();
 
