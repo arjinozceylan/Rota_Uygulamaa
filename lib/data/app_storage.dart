@@ -149,7 +149,7 @@ class AppStorage {
 
       try {
         final response = await http.post(
-          Uri.parse("http://100.118.211.75:3000/routes"),
+          Uri.parse("https://route-backend-1.onrender.com/routes"),
           headers: await AuthService.authHeaders(),
           body: jsonEncode({
             "user_id": userId,
@@ -269,7 +269,7 @@ class AppStorage {
     _fleetPushTimer = Timer(const Duration(seconds: 3), () async {
       try {
         final response = await http.post(
-          Uri.parse("http://100.118.211.75:3000/fleet/$userId"),
+          Uri.parse("https://route-backend-1.onrender.com/fleet/$userId"),
           headers: await AuthService.authHeaders(),
           body: jsonEncode({"vehicles": data}),
         );

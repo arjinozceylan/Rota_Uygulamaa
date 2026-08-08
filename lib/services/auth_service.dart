@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
-  static const String baseUrl = "http://100.118.211.75:3000";
+  static const String baseUrl = "https://route-backend-1.onrender.com";
   static Future<String?> login(String username, String password) async {
     try {
       final response = await http.post(

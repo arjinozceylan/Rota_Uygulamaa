@@ -46,7 +46,7 @@ class _SavedRoutesPageState extends State<SavedRoutesPage> {
   static const _textDark = Color(0xFFE8EDF3);
   static const _textLight = Color(0xFF6B7A8D);
 
-  static const String _baseUrl = 'http://100.118.211.75:3000';
+  static const String _baseUrl = 'https://route-backend-1.onrender.com';
   bool _loading = true;
   String? _error;
   List<_RouteView> _routes = [];

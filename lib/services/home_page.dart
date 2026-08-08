@@ -1,4 +1,5 @@
 import 'package:http/http.dart' as http;
+import 'package:geolocator/geolocator.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
@@ -168,6 +169,7 @@ class _HomePageState extends State<HomePage> {
 
   void _showSyncErrorSnackBar(String message) {
     if (!mounted) return;
+    ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         backgroundColor: const Color(0xFFE53935),
@@ -414,6 +416,111 @@ class _HomePageState extends State<HomePage> {
       _suggestions = [];
       _searchCtrl.clear();
     });
+  }
+
+  Future<void> _useCurrentLocationAsHome() async {
+    // Konum servisi açık mı?
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Konum servisi kapalı. Lütfen tarayıcı/işletim '
+              'sistemi ayarlarından konum servisini açın.'),
+        ),
+      );
+      return;
+    }
+
+    // İzin kontrolü
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Konum izni verilmedi.')),
+        );
+        return;
+      }
+    }
+    if (permission == LocationPermission.deniedForever) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Konum izni kalıcı olarak reddedilmiş. Tarayıcı '
+              'site ayarlarından izin vermeniz gerekiyor.'),
+        ),
+      );
+      return;
+    }
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        duration: Duration(seconds: 10),
+        content: Row(
+          children: [
+            SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            SizedBox(width: 12),
+            Text('Konumunuz bulunuyor...'),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      final geocoded = await _placesService.reverseGeocode(
+        lat: position.latitude,
+        lng: position.longitude,
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).clearSnackBars();
+
+      final code = 'P${(_mapPickCodeCounter++).toString().padLeft(3, '0')}';
+      final home = Address(
+        code: code,
+        address: geocoded?.address ??
+            '${position.latitude.toStringAsFixed(6)}, '
+                '${position.longitude.toStringAsFixed(6)}',
+        placeId: 'gps:${position.latitude.toStringAsFixed(6)},'
+            '${position.longitude.toStringAsFixed(6)}',
+        lat: position.latitude,
+        lng: position.longitude,
+      );
+
+      _fleetState.updateActiveWorkspace((ws) {
+        ws.fixedHomeAddress = home;
+      });
+
+      setState(() {
+        addressCards.removeWhere((e) => e == home.address);
+        dropped.removeWhere((e) => e == home.address);
+        repeatByAddress.remove(home.address);
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Mevcut konum başlangıç olarak ayarlandı: ${home.address}'),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Konum alınamadı: $e')),
+      );
+    }
   }
 
   Future<void> _pickFixedHomeAddress() async {
@@ -922,7 +1029,7 @@ class _HomePageState extends State<HomePage> {
       // aynı algoritma, aynı veri kaynağı (tutarlılık için).
       final stopsForRequest = nodes.sublist(1);
       final response = await http.post(
-        Uri.parse('http://100.118.211.75:3000/routes/optimize'),
+        Uri.parse('https://route-backend-1.onrender.com/routes/optimize'),
         headers: await AuthService.authHeaders(),
         body: jsonEncode({
           'origin': {'latitude': home.lat, 'longitude': home.lng},
@@ -983,6 +1090,7 @@ class _HomePageState extends State<HomePage> {
             _fleetState.activeVehicle,
           )
           .length;
+      ScaffoldMessenger.of(context).clearSnackBars();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: const Color(0xFF1A3A5C),
@@ -1212,6 +1320,7 @@ class _HomePageState extends State<HomePage> {
                             selectedStartAddress: selectedStartAddress,
                             fixedHomeAddress: fixedHomeAddress,
                             onPickFixedHome: _pickFixedHomeAddress,
+                            onUseCurrentLocation: _useCurrentLocationAsHome,
                             onStartSelected: (v) =>
                                 setState(() => selectedStartAddress = v),
                             onRemove: _removeFromQueue,
@@ -2198,6 +2307,7 @@ class _QueuePanel extends StatelessWidget {
     required this.selectedStartAddress,
     required this.fixedHomeAddress,
     required this.onPickFixedHome,
+    required this.onUseCurrentLocation,
     required this.onStartSelected,
     required this.onRemove,
     required this.onAcceptDrop,
@@ -2207,6 +2317,7 @@ class _QueuePanel extends StatelessWidget {
   final String? selectedStartAddress;
   final Address? fixedHomeAddress;
   final VoidCallback onPickFixedHome;
+  final VoidCallback onUseCurrentLocation;
   final ValueChanged<String?> onStartSelected;
   final ValueChanged<String> onRemove, onAcceptDrop;
 
@@ -2326,6 +2437,26 @@ class _QueuePanel extends StatelessWidget {
                         textStyle: const TextStyle(
                           fontWeight: FontWeight.w800,
                           fontSize: 12.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: TextButton.icon(
+                      onPressed: onUseCurrentLocation,
+                      icon: const Icon(
+                        Icons.my_location_rounded,
+                        size: 16,
+                      ),
+                      label: const Text('Mevcut Konumumu Kullan'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: _T.textLight,
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        textStyle: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 12,
                         ),
                       ),
                     ),

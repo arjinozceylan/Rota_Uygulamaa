@@ -1474,7 +1474,7 @@ class _ShiftSection extends StatelessWidget {
                             padding: const EdgeInsets.all(8),
                             itemCount: list.length,
                             buildDefaultDragHandles: false,
-                            onReorderItem: onReorder,
+                            onReorder: onReorder,
                             header: fixedHomeAddress == null
                                 ? null
                                 : Padding(
