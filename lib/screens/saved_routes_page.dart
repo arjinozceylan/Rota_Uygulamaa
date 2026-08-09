@@ -159,7 +159,7 @@ class _SavedRoutesPageState extends State<SavedRoutesPage> {
               .map((r) => _fromBackendJson(r as Map<String, dynamic>))
               .toList();
         } else {
-          AuthService.flagIfSessionError(res.statusCode);
+          AuthService.flagIfSessionError(res.body);
           _error = 'Rotalar sunucudan alınamadı (kod ${res.statusCode}).';
           _routes = _fromLocalRecords();
         }

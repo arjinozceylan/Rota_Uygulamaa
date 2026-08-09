@@ -6,15 +6,19 @@ import 'package:shared_preferences/shared_preferences.dart';
 class AuthService {
   static const String baseUrl = "https://route-backend-1.onrender.com";
 
-  // Backend 401/403 döndüğünde (token süresi dolmuş ya da admin tarafından
-  // iptal edilmiş) true olur. main.dart bunu dinleyip oturumu temizleyip
-  // kullanıcıyı login'e yönlendiriyor — aksi halde kullanıcı "giriş yapmış"
-  // görünen ama hiçbir isteği çalışmayan bir panelde takılı kalırdı.
+  // Backend, token süresi dolmuş/iptal edilmiş durumları gövdede
+  // code: "SESSION_EXPIRED" ile işaretler (bkz. server.js authenticateToken).
+  // 403 ayrıca sahiplik/rol reddi için de kullanıldığından (canAccessUser,
+  // requireRole) sadece statusCode'a bakmak yanlış pozitiflere yol açardı —
+  // artık sadece gerçek SESSION_EXPIRED işaretinde tetikleniyor.
   static final ValueNotifier<bool> sessionExpired = ValueNotifier(false);
-  static void flagIfSessionError(int statusCode) {
-    if (statusCode == 401 || statusCode == 403) {
-      sessionExpired.value = true;
-    }
+  static void flagIfSessionError(String responseBody) {
+    try {
+      final decoded = jsonDecode(responseBody);
+      if (decoded is Map && decoded['code'] == 'SESSION_EXPIRED') {
+        sessionExpired.value = true;
+      }
+    } catch (_) {}
   }
   static Future<String?> login(String username, String password) async {
     try {
