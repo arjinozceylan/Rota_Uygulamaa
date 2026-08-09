@@ -1,4 +1,6 @@
+import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:rota360/core/models/address.dart';
 import 'package:rota360/screens/map_picker_page.dart';
 import 'services/home_page.dart';
@@ -10,8 +12,21 @@ import 'screens/calendar_page.dart';
 import 'screens/calendar_month_overview.dart';
 import 'screens/login_page.dart';
 
+// Login dışındaki her route, ya giriş yapmış (auth_token) ya da misafir
+// modunu (is_guest) seçmiş olmayı gerektirir — aksi halde URL doğrudan
+// yazılarak login/misafir seçimi hiç yapılmadan panele girilebiliyordu.
+Future<String?> _authGuard(BuildContext context, GoRouterState state) async {
+  if (state.matchedLocation == '/login') return null;
+  final prefs = await SharedPreferences.getInstance();
+  final hasToken = prefs.getString('auth_token') != null;
+  final isGuest = prefs.getBool('is_guest') ?? false;
+  if (hasToken || isGuest) return null;
+  return '/login';
+}
+
 final GoRouter router = GoRouter(
   initialLocation: '/login',
+  redirect: _authGuard,
   routes: [
     GoRoute(
       path: '/login',
