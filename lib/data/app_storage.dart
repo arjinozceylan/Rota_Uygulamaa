@@ -167,6 +167,7 @@ class AppStorage {
         );
 
         if (response.statusCode < 200 || response.statusCode >= 300) {
+          AuthService.flagIfSessionError(response.statusCode);
           debugPrint(
             "Backend rota kaydetme hatası: ${response.statusCode} ${response.body}",
           );
@@ -275,6 +276,7 @@ class AppStorage {
         );
 
         if (response.statusCode < 200 || response.statusCode >= 300) {
+          AuthService.flagIfSessionError(response.statusCode);
           debugPrint(
             "Backend filo kaydetme hatası: ${response.statusCode} ${response.body}",
           );

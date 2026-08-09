@@ -1,9 +1,21 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
   static const String baseUrl = "https://route-backend-1.onrender.com";
+
+  // Backend 401/403 döndüğünde (token süresi dolmuş ya da admin tarafından
+  // iptal edilmiş) true olur. main.dart bunu dinleyip oturumu temizleyip
+  // kullanıcıyı login'e yönlendiriyor — aksi halde kullanıcı "giriş yapmış"
+  // görünen ama hiçbir isteği çalışmayan bir panelde takılı kalırdı.
+  static final ValueNotifier<bool> sessionExpired = ValueNotifier(false);
+  static void flagIfSessionError(int statusCode) {
+    if (statusCode == 401 || statusCode == 403) {
+      sessionExpired.value = true;
+    }
+  }
   static Future<String?> login(String username, String password) async {
     try {
       final response = await http.post(

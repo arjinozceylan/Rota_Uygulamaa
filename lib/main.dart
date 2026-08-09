@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'services/auth_service.dart';
 import 'services/fleet_state.dart';
 import 'data/app_storage.dart';
 import 'data/uploaded_files_store.dart';
@@ -30,11 +31,37 @@ void main() async {
   );
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   final List<String> initialAddressCards;
   const MyApp({super.key, required this.initialAddressCards});
 
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
   static const accent = Color(0xFF53D6FF);
+
+  @override
+  void initState() {
+    super.initState();
+    AuthService.sessionExpired.addListener(_handleSessionExpiry);
+  }
+
+  // Backend 401/403 döndüğünde (token süresi dolmuş/iptal edilmiş) oturumu
+  // temizleyip kullanıcıyı login'e atar — aksi halde "giriş yapmış" görünen
+  // ama hiçbir isteği çalışmayan bir panelde takılı kalınırdı.
+  void _handleSessionExpiry() {
+    if (!AuthService.sessionExpired.value) return;
+    AuthService.sessionExpired.value = false;
+    AuthService.logout().then((_) => router.go('/login'));
+  }
+
+  @override
+  void dispose() {
+    AuthService.sessionExpired.removeListener(_handleSessionExpiry);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {

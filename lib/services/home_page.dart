@@ -1044,6 +1044,7 @@ class _HomePageState extends State<HomePage> {
       );
 
       if (response.statusCode < 200 || response.statusCode >= 300) {
+        AuthService.flagIfSessionError(response.statusCode);
         throw Exception('Rota optimizasyonu başarısız: ${response.statusCode}');
       }
 

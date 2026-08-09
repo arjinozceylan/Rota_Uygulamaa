@@ -70,6 +70,7 @@ class _VehicleDriverAssignmentState extends State<VehicleDriverAssignment> {
           _loading = false;
         });
       } else {
+        AuthService.flagIfSessionError(response.statusCode);
         if (!mounted) return;
         setState(() => _loading = false);
       }
@@ -133,6 +134,7 @@ class _VehicleDriverAssignmentState extends State<VehicleDriverAssignment> {
               content: Text('$username kullanıcısının şifresi güncellendi.')),
         );
       } else {
+        AuthService.flagIfSessionError(response.statusCode);
         final body = jsonDecode(response.body);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(body['error'] ?? 'Şifre sıfırlanamadı.')),
