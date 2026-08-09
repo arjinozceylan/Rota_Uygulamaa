@@ -20,6 +20,14 @@ class AuthService {
       final body = jsonDecode(response.body);
 
       if (response.statusCode == 200) {
+        // Sürücü hesapları web/masaüstü paneline giremez — bu panel sadece
+        // admin ve dispatcher rolleri içindir, sürücüler mobil uygulamayı
+        // kullanmalı. Token hiç kaydedilmiyor ki oturum hiç açılmasın.
+        final role = body['role'] as String?;
+        if (role != 'admin' && role != 'dispatcher') {
+          return 'Bu hesap bu panele giriş yapamaz. Sürücü hesapları yalnızca mobil uygulamayı kullanabilir.';
+        }
+
         final prefs = await SharedPreferences.getInstance();
         await prefs.setInt('user_id', body['user_id'] as int);
         await prefs.setString(
