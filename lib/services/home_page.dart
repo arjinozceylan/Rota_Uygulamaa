@@ -1347,7 +1347,10 @@ class _HomePageState extends State<HomePage> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.go('/login'),
+        onPressed: () async {
+          await AuthService.logout();
+          if (context.mounted) context.go('/login');
+        },
         icon: const Icon(Icons.logout_rounded),
         label: const Text('Çıkış Yap'),
         backgroundColor: const Color(0xFF53D6FF),

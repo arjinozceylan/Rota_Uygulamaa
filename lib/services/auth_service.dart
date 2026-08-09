@@ -54,6 +54,17 @@ class AuthService {
     await prefs.remove('user_id');
   }
 
+  /// Oturumu kapatır. "Çıkış Yap" login'e yönlendirmekle yetiniyordu,
+  /// auth_token hiç silinmiyordu — paylaşımlı (hastane) bilgisayarlarda
+  /// önceki oturumun token'ı cihazda kalmaya devam ediyordu.
+  static Future<void> logout() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('user_id');
+    await prefs.remove('username');
+    await prefs.remove('auth_token');
+    await prefs.remove('is_guest');
+  }
+
   /// Backend isteklerinde kullanılacak, token içeren standart header'lar.
   static Future<Map<String, String>> authHeaders() async {
     final prefs = await SharedPreferences.getInstance();
