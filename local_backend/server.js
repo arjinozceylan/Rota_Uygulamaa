@@ -7,7 +7,19 @@ const fs = require("fs");
 const app = express();
 const PORT = 3100;
 
-app.use(cors());
+// Sunucu sadece 127.0.0.1'de dinliyor (asagida) ama varsayilan cors()
+// her origin'e izin veriyordu — ayni bilgisayarda acik kotu niyetli bir
+// web sayfasi bu adrese fetch atip hasta listesini (ad/telefon/adres)
+// kimlik dogrulamasi olmadan okuyabilirdi. Sadece localhost/127.0.0.1
+// origin'lerine izin verilir (web uygulamasi da bu makinede calisir).
+app.use(cors({
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
+    if (/^https?:\/\/localhost(:\d+)?$/.test(origin)) return callback(null, true);
+    if (/^https?:\/\/127\.0\.0\.1(:\d+)?$/.test(origin)) return callback(null, true);
+    return callback(new Error("CORS engellendi: " + origin));
+  },
+}));
 app.use(express.json({ limit: "10mb" }));
 
 // Veritabanını kullanıcı verisinin güvenli tutulacağı local klasörde sakla.
