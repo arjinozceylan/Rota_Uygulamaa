@@ -4,6 +4,17 @@ import 'package:http/http.dart' as http;
 import '../core/models/address.dart';
 import '../config/app_config.dart';
 
+/// Tek bir arama denemesinin sonucu. [wasRateLimited] true ise çağıran taraf
+/// (bkz. home_page.dart'taki adaptif hız kontrolü) yavaşlayıp aynı sorguyu
+/// tekrar denemeli — burada sabit bir bekleme/yeniden deneme yapılmıyor,
+/// çünkü hesabın gerçek hız sınırı bilinmiyor ve bu karar tüm içe aktarım
+/// boyunca paylaşılan, kendini ayarlayan bir mekanizmaya bırakılıyor.
+class TomTomGeocodeAttempt {
+  final List<Address> addresses;
+  final bool wasRateLimited;
+  const TomTomGeocodeAttempt(this.addresses, this.wasRateLimited);
+}
+
 /// TomTom Geocoding API ile adres arama servisi.
 ///
 /// OsmPlacesService (Nominatim) ile aynı amaca hizmet eder ama sadece CSV
@@ -23,40 +34,49 @@ class TomTomGeocodingService {
 
   static bool get isConfigured => AppConfig.tomtomApiKey.isNotEmpty;
 
-  Future<List<Address>> search({
+  Future<TomTomGeocodeAttempt> search({
     required String query,
     int limit = 1,
     String countryCode = 'TR',
     String language = 'tr-TR',
   }) async {
     final q = query.trim();
-    if (q.isEmpty || !isConfigured) return [];
+    if (q.isEmpty || !isConfigured) {
+      return const TomTomGeocodeAttempt([], false);
+    }
 
-    Future<http.Response> doRequest() {
-      final uri = Uri.https(_host, '/search/2/geocode/$q.json', {
+    // Uri.https(host, path, ...) verdiğimiz path string'ini '/' karakterine
+    // göre segmentlere ayırır — adres metninde '/' geçerse (Türkçe
+    // adreslerde "No:5/3", "Blok A/2" gibi çok yaygın) bu bir URL ayırıcı
+    // sanılıp istek bozuluyor ve 404 dönüyordu. pathSegments kullanarak
+    // sorgu metnini TEK bir segment olarak veriyoruz; içindeki '/' dahil
+    // her özel karakter doğru şekilde %-encode edilir.
+    final uri = Uri(
+      scheme: 'https',
+      host: _host,
+      pathSegments: ['search', '2', 'geocode', '$q.json'],
+      queryParameters: {
         'key': AppConfig.tomtomApiKey,
         'limit': limit.toString(),
         'countrySet': countryCode,
         'language': language,
-      });
-      return http.get(uri).timeout(const Duration(seconds: 10));
-    }
+      },
+    );
 
     try {
-      var res = await doRequest();
+      final res = await http.get(uri).timeout(const Duration(seconds: 10));
+
       if (res.statusCode == 429) {
-        // Kısa bir bekleme sonrası tek seferlik yeniden dene — burst
-        // sırasında ara sıra 429 gelebilir, adresin tamamen kaybolmasındansa
-        // bir kez daha denemek daha doğru.
-        await Future.delayed(const Duration(seconds: 1));
-        res = await doRequest();
+        return const TomTomGeocodeAttempt([], true);
       }
-      if (res.statusCode != 200) return [];
+      if (res.statusCode != 200) {
+        return const TomTomGeocodeAttempt([], false);
+      }
 
       final decoded = jsonDecode(res.body) as Map<String, dynamic>;
       final results = decoded['results'] as List? ?? [];
 
-      return results
+      final addresses = results
           .map((r) {
             final m = r as Map<String, dynamic>;
             final position = m['position'] as Map<String, dynamic>?;
@@ -76,8 +96,10 @@ class TomTomGeocodingService {
           })
           .where((a) => a.address.trim().isNotEmpty && a.hasCoordinates)
           .toList();
+
+      return TomTomGeocodeAttempt(addresses, false);
     } catch (_) {
-      return [];
+      return const TomTomGeocodeAttempt([], false);
     }
   }
 }

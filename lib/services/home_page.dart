@@ -265,25 +265,73 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // TomTom "Standard QPS" (Free/Pay-as-you-grow) hesaplarında saniyede 5
+  // istekle sınırlı — bkz. developer.tomtom.com Plans sayfası. Yalnızca
+  // Enterprise plan bu limiti kaldırıyor. Bu yüzden tavanı saniyede 5'in
+  // biraz altında (~4.5) tutuyoruz; körlemesine daha hızlıya çıkıp sürekli
+  // 429 yiyerek vakit kaybetmenin anlamı yok.
+  int _tomtomDelayMs = 300;
+  int _tomtomConsecutiveOk = 0;
+  static const _tomtomMinDelayMs = 220; // ~4.5 istek/sn
+  static const _tomtomMaxDelayMs = 4000;
+
   // ── Adres geocoding (CSV import için) ─────────────────────────────────────
   Future<Address> _makeAndGeocodeManualAddress(String text) async {
     final t = text.trim();
     final code = 'M${(_manualCodeCounter++).toString().padLeft(3, '0')}';
     try {
-      // TomTom key tanımlıysa toplu geocoding için onu kullan (hızlı,
-      // güvenilir); tanımlı değilse eskisi gibi Nominatim'e düş.
-      final results = TomTomGeocodingService.isConfigured
-          ? await _bulkGeocodeService.search(query: _sanitizeForGeocoding(t))
-          : await _placesService.search(query: _sanitizeForGeocoding(t));
-      if (results.isNotEmpty) {
-        final first = results.first;
-        return Address(
-          code: code,
-          address: t,
-          placeId: first.placeId,
-          lat: first.lat,
-          lng: first.lng,
+      if (TomTomGeocodingService.isConfigured) {
+        // Adaptif hız: 429 gelirse hemen yavaşla ve aynı sorguyu tekrar
+        // dene; art arda yeterince başarı olursa kademeli hızlan. Sabit bir
+        // sayı tahmin etmek yerine hesabın gerçek/o anki limitine yakınsar.
+        for (var attempt = 0; attempt < 6; attempt++) {
+          final result = await _bulkGeocodeService.search(
+            query: _sanitizeForGeocoding(t),
+          );
+          if (!result.wasRateLimited) {
+            if (result.addresses.isNotEmpty) {
+              _tomtomConsecutiveOk++;
+              if (_tomtomConsecutiveOk >= 20 &&
+                  _tomtomDelayMs > _tomtomMinDelayMs) {
+                _tomtomDelayMs = (_tomtomDelayMs * 0.85)
+                    .round()
+                    .clamp(_tomtomMinDelayMs, _tomtomMaxDelayMs);
+                _tomtomConsecutiveOk = 0;
+              }
+              final first = result.addresses.first;
+              return Address(
+                code: code,
+                address: t,
+                placeId: first.placeId,
+                lat: first.lat,
+                lng: first.lng,
+              );
+            }
+            // 200 döndü ama sonuç yok — bu adres gerçekten bulunamadı,
+            // tekrar denemenin anlamı yok.
+            break;
+          }
+          // 429: yavaşla, kısa bir bekleme sonrası aynı adresi tekrar dene.
+          _tomtomDelayMs = (_tomtomDelayMs * 1.6)
+              .round()
+              .clamp(_tomtomMinDelayMs, _tomtomMaxDelayMs);
+          _tomtomConsecutiveOk = 0;
+          await Future.delayed(Duration(milliseconds: _tomtomDelayMs));
+        }
+      } else {
+        final results = await _placesService.search(
+          query: _sanitizeForGeocoding(t),
         );
+        if (results.isNotEmpty) {
+          final first = results.first;
+          return Address(
+            code: code,
+            address: t,
+            placeId: first.placeId,
+            lat: first.lat,
+            lng: first.lng,
+          );
+        }
       }
     } catch (e) {
       // Hata durumunda fallback — continue
@@ -901,31 +949,21 @@ class _HomePageState extends State<HomePage> {
       );
 
       // Her adres için geocoding yap (sıra korunarak listenin sonuna eklenir).
-      // TomTom yapılandırılıysa toplu içe aktarım için paralel batch'ler
-      // halinde (hızlı, yüksek hacme uygun); değilse Nominatim'in
-      // saniyede-1-istek kuralına uymak için teker teker işlenir.
+      // NOT: Eskiden burada TomTom için 5'li paralel batch deniyorduk ama
+      // gerçek hesapta bu anında 429 (Too Many Requests) fırtınasına yol
+      // açtı. Artık her zaman tek tek isteniyor; TomTom kullanılırken
+      // aradaki bekleme _tomtomDelayMs ile adaptif olarak ayarlanıyor
+      // (bkz. _makeAndGeocodeManualAddress) — hesabın "Standard QPS"
+      // (~5/sn) tavanına yakın, gereksiz 429 yemeden.
       final useBulkFast = TomTomGeocodingService.isConfigured;
-      final batchSize = useBulkFast ? 5 : 1;
-      final batchDelay = useBulkFast
-          ? const Duration(milliseconds: 400)
-          : const Duration(milliseconds: 100);
+      const nominatimDelay = Duration(milliseconds: 100);
 
       int added = 0;
-      for (var start = 0; start < addressesToProcess.length; start += batchSize) {
-        final end = (start + batchSize < addressesToProcess.length)
-            ? start + batchSize
-            : addressesToProcess.length;
-
-        final batchResults = await Future.wait(
-          List.generate(
-            end - start,
-            (offset) => _makeAndGeocodeManualAddress(addressesToProcess[start + offset]),
-          ),
-        );
-
-        for (var offset = 0; offset < batchResults.length; offset++) {
-          final i = start + offset;
-          var geocodedAddress = batchResults[offset];
+      for (var i = 0; i < addressesToProcess.length; i++) {
+        try {
+          var geocodedAddress = await _makeAndGeocodeManualAddress(
+            addressesToProcess[i],
+          );
           final seq = sequencesToProcess[i];
           if (seq != null) {
             geocodedAddress = geocodedAddress.copyWith(
@@ -936,11 +974,14 @@ class _HomePageState extends State<HomePage> {
             _addAddressToPoolAndCards(geocodedAddress, prepend: false);
             added++;
           }
+        } catch (e) {
+          // Devam et, bu spesifik adres başarısız olsa da diğerlerine geç
         }
-
-        // Yapı'yı responsive tutmak ve API'yi yormamak için batch'ler
-        // arasında küçük bir delay.
-        await Future.delayed(batchDelay);
+        await Future.delayed(
+          useBulkFast
+              ? Duration(milliseconds: _tomtomDelayMs)
+              : nominatimDelay,
+        );
       }
 
       if (!mounted) return;
