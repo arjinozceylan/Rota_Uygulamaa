@@ -22,6 +22,7 @@ import '../models/vehicle_workspace.dart';
 import 'fleet_state.dart';
 import '../screens/map_picker_page.dart';
 import '../screens/osm_places_service.dart';
+import 'tomtom_geocoding_service.dart';
 import 'reports_page.dart';
 import '../widgets/vehicle_selector_bar.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -86,6 +87,9 @@ class _HomePageState extends State<HomePage> {
   final TextEditingController _searchCtrl = TextEditingController();
   final TextEditingController _manualCtrl = TextEditingController();
   final OsmPlacesService _placesService = const OsmPlacesService();
+  // Sadece CSV toplu içe aktarımında kullanılır — bkz. tomtom_geocoding_service.dart
+  final TomTomGeocodingService _bulkGeocodeService =
+      const TomTomGeocodingService();
   Timer? _searchDebounce;
   int _latestSearchId = 0;
   bool _isSearching = false;
@@ -266,11 +270,11 @@ class _HomePageState extends State<HomePage> {
     final t = text.trim();
     final code = 'M${(_manualCodeCounter++).toString().padLeft(3, '0')}';
     try {
-      // OSM Places Service'den adres ara (isim/telefon gibi adres-dışı
-      // kısımlar geocoding başarısını düşürdüğü için sorgu temizlenir)
-      final results = await _placesService.search(
-        query: _sanitizeForGeocoding(t),
-      );
+      // TomTom key tanımlıysa toplu geocoding için onu kullan (hızlı,
+      // güvenilir); tanımlı değilse eskisi gibi Nominatim'e düş.
+      final results = TomTomGeocodingService.isConfigured
+          ? await _bulkGeocodeService.search(query: _sanitizeForGeocoding(t))
+          : await _placesService.search(query: _sanitizeForGeocoding(t));
       if (results.isNotEmpty) {
         final first = results.first;
         return Address(
@@ -896,13 +900,32 @@ class _HomePageState extends State<HomePage> {
         },
       );
 
-      // Her adres için geocoding yap (sıra korunarak listenin sonuna eklenir)
+      // Her adres için geocoding yap (sıra korunarak listenin sonuna eklenir).
+      // TomTom yapılandırılıysa toplu içe aktarım için paralel batch'ler
+      // halinde (hızlı, yüksek hacme uygun); değilse Nominatim'in
+      // saniyede-1-istek kuralına uymak için teker teker işlenir.
+      final useBulkFast = TomTomGeocodingService.isConfigured;
+      final batchSize = useBulkFast ? 5 : 1;
+      final batchDelay = useBulkFast
+          ? const Duration(milliseconds: 400)
+          : const Duration(milliseconds: 100);
+
       int added = 0;
-      for (var i = 0; i < addressesToProcess.length; i++) {
-        try {
-          var geocodedAddress = await _makeAndGeocodeManualAddress(
-            addressesToProcess[i],
-          );
+      for (var start = 0; start < addressesToProcess.length; start += batchSize) {
+        final end = (start + batchSize < addressesToProcess.length)
+            ? start + batchSize
+            : addressesToProcess.length;
+
+        final batchResults = await Future.wait(
+          List.generate(
+            end - start,
+            (offset) => _makeAndGeocodeManualAddress(addressesToProcess[start + offset]),
+          ),
+        );
+
+        for (var offset = 0; offset < batchResults.length; offset++) {
+          final i = start + offset;
+          var geocodedAddress = batchResults[offset];
           final seq = sequencesToProcess[i];
           if (seq != null) {
             geocodedAddress = geocodedAddress.copyWith(
@@ -913,11 +936,11 @@ class _HomePageState extends State<HomePage> {
             _addAddressToPoolAndCards(geocodedAddress, prepend: false);
             added++;
           }
-        } catch (e) {
-          // Devam et, bu spesifik adres başarısız olsa da diğerlerine geç
         }
-        // Yapı'yı responsive tutmak için küçük bir delay
-        await Future.delayed(const Duration(milliseconds: 100));
+
+        // Yapı'yı responsive tutmak ve API'yi yormamak için batch'ler
+        // arasında küçük bir delay.
+        await Future.delayed(batchDelay);
       }
 
       if (!mounted) return;
