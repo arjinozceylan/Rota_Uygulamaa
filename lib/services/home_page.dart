@@ -1035,6 +1035,10 @@ class _HomePageState extends State<HomePage> {
         }
       }
 
+      // await http.post yukarida sayfa unmount olmus olabilir — context'i
+      // kullanmadan once kontrol et.
+      if (!mounted) return;
+
       // Progress dialog göster
       showDialog(
         context: context,
