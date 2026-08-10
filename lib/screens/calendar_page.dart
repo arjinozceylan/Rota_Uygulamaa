@@ -374,12 +374,17 @@ class _CalendarPageState extends State<CalendarPage>
     final old = list[index];
     final updated = await _showAddOrEditDialog(title: old.title, existing: old);
     if (updated == null) return;
-    _showRecalcBanner('Adres güncellendi, rota yeniden hesaplanıyor...');
     setState(() {
       _removeSeriesEverywhere(old.seriesId);
       _addWithRepeat(baseDay: dayKey, item: updated, shift: shift);
     });
     _fleetState.markDirty();
+    // Bu diyalogda sadece not/tekrar değişiyor — adres hiç değişmiyor ve
+    // rota hiç yeniden hesaplanmıyor. Önceden burada "Adres güncellendi,
+    // rota yeniden hesaplanıyor..." gösteriliyordu; bu hem yanlıştı hem de
+    // gerçekte kaydedilen notu görünmez kılıyordu (kullanıcı ne olduğunu
+    // anlayamıyordu). Artık gerçekte olanı söylüyor.
+    _toast('Kaydedildi.');
   }
 
   Address? _addressByTitle(String title) {
