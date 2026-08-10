@@ -127,10 +127,11 @@ class AppStorage {
     await prefs.setString(_keyRoutes, jsonEncode(records));
 
     // En son oluşturulan rotayı backend'e gönder (koordinatlı duraklarla).
-    // user_id yoksa misafir modundayız demektir (bkz. AuthService.
-    // continueAsGuest) — önceden buradaki "?? 1" düşüşü yüzünden misafir
-    // verisi backend'deki gerçek hesap #1'in üzerine sessizce yazılıyordu.
-    // Artık misafir için backend'e hiç gönderilmiyor, sadece yerelde kalıyor.
+    // Panel artık girişsiz kullanılamadığı için (misafir modu kaldırıldı,
+    // bkz. router.dart _authGuard) user_id normalde her zaman dolu olur;
+    // yine de savunma amaçlı kontrol kalıyor — önceden buradaki "?? 1"
+    // düşüşü yüzünden bir açık, backend'deki gerçek hesap #1'in üzerine
+    // sessizce yazılmasına yol açmıştı.
     final userId = prefs.getInt("user_id");
     if (allRecords.isNotEmpty && userId != null) {
       final lastRoute = allRecords.first;
@@ -288,9 +289,9 @@ class AppStorage {
     await prefs.setString(_keyFleet, jsonEncode(data));
 
     // Backend'e gönderimi 3sn debounce ederek art arda gelen aksiyonları
-    // (adres ekle/sil vb.) tek istekte topla. user_id yoksa misafir
-    // modundayız — misafir verisi artık backend'deki gerçek bir hesabın
-    // üzerine yazılmasın diye backend'e hiç gönderilmiyor.
+    // (adres ekle/sil vb.) tek istekte topla. Panel artık girişsiz
+    // kullanılamadığı için user_id normalde her zaman dolu olur; yine de
+    // savunma amaçlı kontrol kalıyor (bkz. yukarıdaki not).
     final userId = prefs.getInt("user_id");
     if (userId == null) return;
     _fleetPushTimer?.cancel();

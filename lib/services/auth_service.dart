@@ -48,7 +48,6 @@ class AuthService {
         await prefs.setInt('user_id', body['user_id'] as int);
         await prefs.setString(
             'username', body['username']?.toString() ?? username);
-        await prefs.setBool('is_guest', false);
         final authToken = body['token'];
         if (authToken != null) {
           await prefs.setString('auth_token', authToken.toString());
@@ -64,12 +63,6 @@ class AuthService {
     }
   }
 
-  static Future<void> continueAsGuest() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('is_guest', true);
-    await prefs.remove('user_id');
-  }
-
   /// Oturumu kapatır. "Çıkış Yap" login'e yönlendirmekle yetiniyordu,
   /// auth_token hiç silinmiyordu — paylaşımlı (hastane) bilgisayarlarda
   /// önceki oturumun token'ı cihazda kalmaya devam ediyordu.
@@ -78,7 +71,6 @@ class AuthService {
     await prefs.remove('user_id');
     await prefs.remove('username');
     await prefs.remove('auth_token');
-    await prefs.remove('is_guest');
   }
 
   /// Backend isteklerinde kullanılacak, token içeren standart header'lar.

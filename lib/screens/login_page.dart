@@ -2,8 +2,6 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 
-enum _LoginMode { guest, existing }
-
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key, this.initialAddressCards = const []});
   final List<String> initialAddressCards;
@@ -14,8 +12,6 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
   static const accent = Color(0xFF53D6FF);
-
-  _LoginMode mode = _LoginMode.guest;
 
   final TextEditingController usernameCtrl = TextEditingController();
   final TextEditingController passwordCtrl = TextEditingController();
@@ -32,11 +28,6 @@ class _LoginPageState extends State<LoginPage> {
 
   void _goHome() {
     context.go('/');
-  }
-
-  Future<void> _continueAsGuest() async {
-    await AuthService.continueAsGuest();
-    _goHome();
   }
 
   Future<void> _loginExisting() async {
@@ -116,48 +107,16 @@ class _LoginPageState extends State<LoginPage> {
                             children: [
                               const _RightHeader(),
                               const SizedBox(height: 14),
-                              _ModeSwitch(
-                                mode: mode,
+                              _ExistingForm(
+                                usernameCtrl: usernameCtrl,
+                                passwordCtrl: passwordCtrl,
+                                hidePassword: hidePassword,
+                                onToggleHide: () => setState(
+                                  () => hidePassword = !hidePassword,
+                                ),
+                                onLogin: isSubmitting ? null : _loginExisting,
+                                isSubmitting: isSubmitting,
                                 accent: accent,
-                                onChanged: (m) => setState(() => mode = m),
-                              ),
-                              const SizedBox(height: 12),
-                              AnimatedSwitcher(
-                                duration: const Duration(milliseconds: 220),
-                                switchInCurve: Curves.easeOutCubic,
-                                switchOutCurve: Curves.easeInCubic,
-                                transitionBuilder: (child, anim) {
-                                  return FadeTransition(
-                                    opacity: anim,
-                                    child: SlideTransition(
-                                      position: Tween<Offset>(
-                                        begin: const Offset(0, 0.03),
-                                        end: Offset.zero,
-                                      ).animate(anim),
-                                      child: child,
-                                    ),
-                                  );
-                                },
-                                child: mode == _LoginMode.existing
-                                    ? _ExistingForm(
-                                        key: const ValueKey('existingForm'),
-                                        usernameCtrl: usernameCtrl,
-                                        passwordCtrl: passwordCtrl,
-                                        hidePassword: hidePassword,
-                                        onToggleHide: () => setState(
-                                          () => hidePassword = !hidePassword,
-                                        ),
-                                        onLogin: isSubmitting
-                                            ? null
-                                            : _loginExisting,
-                                        isSubmitting: isSubmitting,
-                                        accent: accent,
-                                      )
-                                    : _GuestBlock(
-                                        key: const ValueKey('guestBlock'),
-                                        accent: accent,
-                                        onContinue: _continueAsGuest,
-                                      ),
                               ),
                               const SizedBox(height: 12),
                               Text(
@@ -403,7 +362,7 @@ class _LeftBrandPanel extends StatelessWidget {
           ),
           const SizedBox(height: 18),
           Text(
-            'İpucu: Misafir modunda planlar cihazda tutulur.',
+            'Bu panele yalnızca hastane personeli giriş yapabilir.',
             style: TextStyle(
               fontSize: 12,
               color: Colors.white.withValues(alpha: 0.45),
@@ -519,207 +478,6 @@ class _RightHeader extends StatelessWidget {
                 ),
               ),
             ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/* --------------------------- Mode Switch --------------------------- */
-
-class _ModeSwitch extends StatelessWidget {
-  const _ModeSwitch({
-    required this.mode,
-    required this.accent,
-    required this.onChanged,
-  });
-
-  final _LoginMode mode;
-  final Color accent;
-  final ValueChanged<_LoginMode> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(6),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        color: Colors.white.withValues(alpha: 0.04),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: _Choice(
-              selected: mode == _LoginMode.guest,
-              icon: Icons.person_outline_rounded,
-              title: 'Misafir',
-              subtitle: '(Kayıt olmadan)',
-              onTap: () => onChanged(_LoginMode.guest),
-              accent: accent,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: _Choice(
-              selected: mode == _LoginMode.existing,
-              icon: Icons.lock_outline_rounded,
-              title: 'Mevcut Kullanıcı',
-              subtitle: 'Kullanıcı adı/şifre',
-              onTap: () => onChanged(_LoginMode.existing),
-              accent: accent,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Choice extends StatelessWidget {
-  const _Choice({
-    required this.selected,
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-    required this.accent,
-  });
-
-  final bool selected;
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-  final Color accent;
-
-  @override
-  Widget build(BuildContext context) {
-    final bg = selected ? accent.withValues(alpha: 0.10) : Colors.transparent;
-    final br =
-        selected ? accent.withValues(alpha: 0.40) : Colors.white.withValues(alpha: 0.10);
-
-    return InkWell(
-      borderRadius: BorderRadius.circular(14),
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
-          color: bg,
-          border: Border.all(color: br),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              icon,
-              size: 20,
-              color: selected ? accent : Colors.white.withValues(alpha: 0.75),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          title,
-                          style: TextStyle(
-                            fontWeight: FontWeight.w900,
-                            color: Colors.white.withValues(alpha: 0.88),
-                          ),
-                        ),
-                      ),
-                      if (selected)
-                        Icon(
-                          Icons.check_circle_rounded,
-                          size: 18,
-                          color: accent,
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.white.withValues(alpha: 0.52),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/* --------------------------- Guest --------------------------- */
-
-class _GuestBlock extends StatelessWidget {
-  const _GuestBlock({
-    super.key,
-    required this.accent,
-    required this.onContinue,
-  });
-
-  final Color accent;
-  final VoidCallback onContinue;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      key: key,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            color: Colors.white.withValues(alpha: 0.04),
-            border: Border.all(color: accent.withValues(alpha: 0.35)),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(Icons.info_outline_rounded, color: accent),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Misafir modunda planlar cihazda tutulur. İstersen sonra mevcut kullanıcı ile giriş yapabilirsin.',
-                  style: TextStyle(
-                    height: 1.35,
-                    color: Colors.white.withValues(alpha: 0.72),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-        SizedBox(
-          height: 48,
-          child: OutlinedButton.icon(
-            onPressed: onContinue,
-            icon: const Icon(Icons.arrow_forward_rounded),
-            label: const Text(
-              'Misafir Olarak Devam Et',
-              style: TextStyle(fontWeight: FontWeight.w900),
-            ),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: accent,
-              side: BorderSide(color: accent.withValues(alpha: 0.55), width: 1.2),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-              backgroundColor: Colors.transparent,
-            ),
           ),
         ),
       ],

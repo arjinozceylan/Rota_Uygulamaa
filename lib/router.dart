@@ -12,15 +12,15 @@ import 'screens/calendar_page.dart';
 import 'screens/calendar_month_overview.dart';
 import 'screens/login_page.dart';
 
-// Login dışındaki her route, ya giriş yapmış (auth_token) ya da misafir
-// modunu (is_guest) seçmiş olmayı gerektirir — aksi halde URL doğrudan
-// yazılarak login/misafir seçimi hiç yapılmadan panele girilebiliyordu.
+// Login dışındaki her route, giriş yapmış (auth_token) olmayı gerektirir —
+// aksi halde URL doğrudan yazılarak login hiç yapılmadan panele
+// girilebiliyordu. Panel yalnızca hastane personeli (admin/dispatcher)
+// içindir, misafir girişi kaldırıldı.
 Future<String?> _authGuard(BuildContext context, GoRouterState state) async {
   if (state.matchedLocation == '/login') return null;
   final prefs = await SharedPreferences.getInstance();
   final hasToken = prefs.getString('auth_token') != null;
-  final isGuest = prefs.getBool('is_guest') ?? false;
-  if (hasToken || isGuest) return null;
+  if (hasToken) return null;
   return '/login';
 }
 
