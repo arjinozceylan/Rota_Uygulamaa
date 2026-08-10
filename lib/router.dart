@@ -14,8 +14,8 @@ import 'screens/login_page.dart';
 
 // Login dışındaki her route, giriş yapmış (auth_token) olmayı gerektirir —
 // aksi halde URL doğrudan yazılarak login hiç yapılmadan panele
-// girilebiliyordu. Panel yalnızca hastane personeli (admin/dispatcher)
-// içindir, misafir girişi kaldırıldı.
+// girilebiliyordu. Panel yalnızca hastane personeli (admin) içindir
+// (backend'de dispatcher rolü kaldırıldı), misafir girişi kaldırıldı.
 Future<String?> _authGuard(BuildContext context, GoRouterState state) async {
   if (state.matchedLocation == '/login') return null;
   final prefs = await SharedPreferences.getInstance();

@@ -37,10 +37,12 @@ class AuthService {
 
       if (response.statusCode == 200) {
         // Sürücü hesapları web/masaüstü paneline giremez — bu panel sadece
-        // admin ve dispatcher rolleri içindir, sürücüler mobil uygulamayı
-        // kullanmalı. Token hiç kaydedilmiyor ki oturum hiç açılmasın.
+        // admin rolü içindir (backend'de dispatcher rolü kaldırıldı, bkz.
+        // server.js STAFF_ROLES — Nehir'in isteği). "dispatcher" burada da
+        // kabul edilseydi, böyle bir hesap panele girebilir ama her gerçek
+        // işlemde backend'den 403 alırdı.
         final role = body['role'] as String?;
-        if (role != 'admin' && role != 'dispatcher') {
+        if (role != 'admin') {
           return 'Bu hesap bu panele giriş yapamaz. Sürücü hesapları yalnızca mobil uygulamayı kullanabilir.';
         }
 
