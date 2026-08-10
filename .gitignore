@@ -27,3 +27,8 @@ linux/flutter/ephemeral/
 .vscode/
 /lib.zip
 /lib/macos/
+
+# Rota360 local backend
+
+local_backend/node_modules/
+local_backend/data/

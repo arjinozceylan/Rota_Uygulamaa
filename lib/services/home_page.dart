@@ -160,15 +160,99 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+
     // Kalıcı depodan gelen kartlarla başlat
     addressCards = List<String>.from(widget.initialAddressCards);
+
     // AddressStore'da olup listede olmayan adresleri de ekle
     for (final a in AddressStore.items) {
       final text = a.address;
       if (!addressCards.contains(text)) addressCards.insert(0, text);
     }
+
     _searchCtrl.addListener(_onSearchChanged);
     AppStorage.instance.onSyncError = _showSyncErrorSnackBar;
+
+    // Local SQLite'taki aktif adresleri uygulama açılırken geri yükle
+    _loadPatientsFromLocalDatabase();
+  }
+
+  Future<void> _loadPatientsFromLocalDatabase() async {
+    try {
+      final response = await http.get(
+        Uri.parse('http://127.0.0.1:3100/patients'),
+      );
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return;
+      }
+
+      final decoded = jsonDecode(response.body);
+
+      if (decoded is! List) return;
+
+      for (final item in decoded) {
+        if (item is! Map) continue;
+
+        final row = Map<String, dynamic>.from(item);
+
+        final addressText = row['address']?.toString().trim() ?? '';
+        if (addressText.isEmpty) continue;
+
+        final externalCode = row['external_code']?.toString().trim();
+
+        final latRaw = row['latitude'];
+        final lngRaw = row['longitude'];
+
+        double? lat;
+        double? lng;
+
+        if (latRaw is num) {
+          lat = latRaw.toDouble();
+        } else if (latRaw != null) {
+          lat = double.tryParse(
+            latRaw.toString().replaceAll(',', '.'),
+          );
+        }
+
+        if (lngRaw is num) {
+          lng = lngRaw.toDouble();
+        } else if (lngRaw != null) {
+          lng = double.tryParse(
+            lngRaw.toString().replaceAll(',', '.'),
+          );
+        }
+
+        var address = Address(
+          code: externalCode == null || externalCode.isEmpty
+              ? 'L${row['id']}'
+              : externalCode,
+          address: addressText,
+          placeId: 'local-db:${row['id']}',
+          lat: lat,
+          lng: lng,
+        );
+
+        if (externalCode != null && externalCode.isNotEmpty) {
+          address = address.copyWith(
+            address: '$externalCode - ${address.address}',
+          );
+        }
+
+        AddressStore.add(address);
+
+        if (!addressCards.contains(address.address)) {
+          addressCards.add(address.address);
+        }
+      }
+
+      if (mounted) {
+        setState(() {});
+      }
+    } catch (e) {
+      // Local backend kapalıysa uygulamayı çökertme.
+      debugPrint('Local patients yüklenemedi: $e');
+    }
   }
 
   void _showSyncErrorSnackBar(String message) {
@@ -563,7 +647,8 @@ class _HomePageState extends State<HomePage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Mevcut konum başlangıç olarak ayarlandı: ${home.address}'),
+          content:
+              Text('Mevcut konum başlangıç olarak ayarlandı: ${home.address}'),
         ),
       );
     } catch (e) {
@@ -921,6 +1006,35 @@ class _HomePageState extends State<HomePage> {
         return;
       }
 
+      final cacheResponse = await http.post(
+        Uri.parse('http://127.0.0.1:3100/geocode-cache/bulk'),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'addresses': addressesToProcess,
+        }),
+      );
+
+      final Map<String, dynamic> cachedCoordinates = {};
+
+      if (cacheResponse.statusCode >= 200 && cacheResponse.statusCode < 300) {
+        final decoded = jsonDecode(cacheResponse.body) as Map<String, dynamic>;
+
+        final results = decoded['results'];
+
+        if (results is Map) {
+          cachedCoordinates.addAll(
+            results.map(
+              (key, value) => MapEntry(
+                key.toString(),
+                Map<String, dynamic>.from(value as Map),
+              ),
+            ),
+          );
+        }
+      }
+
       // Progress dialog göster
       showDialog(
         context: context,
@@ -959,29 +1073,141 @@ class _HomePageState extends State<HomePage> {
       const nominatimDelay = Duration(milliseconds: 100);
 
       int added = 0;
+      int cacheHits = 0;
+      int geocodedCount = 0;
+
+      final localPatients = <Map<String, dynamic>>[];
+
       for (var i = 0; i < addressesToProcess.length; i++) {
         try {
-          var geocodedAddress = await _makeAndGeocodeManualAddress(
-            addressesToProcess[i],
-          );
+          final originalAddress = addressesToProcess[i];
           final seq = sequencesToProcess[i];
+
+          Address geocodedAddress;
+
+          // 1) Önce lokal SQLite cache'e bak
+          final cached = cachedCoordinates[originalAddress];
+
+          if (cached is Map &&
+              cached['latitude'] != null &&
+              cached['longitude'] != null) {
+            final lat = (cached['latitude'] as num).toDouble();
+            final lng = (cached['longitude'] as num).toDouble();
+
+            geocodedAddress = Address(
+              code: 'M${(_manualCodeCounter++).toString().padLeft(3, '0')}',
+              address: originalAddress,
+              placeId: 'local-cache:$originalAddress',
+              lat: lat,
+              lng: lng,
+            );
+
+            cacheHits++;
+          } else {
+            // 2) Cache'de yoksa normal geocoding yap
+            geocodedAddress = await _makeAndGeocodeManualAddress(
+              originalAddress,
+            );
+
+            geocodedCount++;
+
+            // Geocoding başarılıysa sonucu lokal cache'e kaydet
+            if (geocodedAddress.lat != null && geocodedAddress.lng != null) {
+              try {
+                await http.post(
+                  Uri.parse('http://127.0.0.1:3100/geocode-cache'),
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: jsonEncode({
+                    'address': originalAddress,
+                    'latitude': geocodedAddress.lat,
+                    'longitude': geocodedAddress.lng,
+                  }),
+                );
+              } catch (_) {
+                // Cache yazılamasa bile ana CSV import akışını durdurma.
+              }
+            }
+          }
+
+          // Lokal SQLite'a aktarılacak kayıt
+          localPatients.add({
+            'externalCode': seq,
+            'address': originalAddress,
+            'latitude': geocodedAddress.lat,
+            'longitude': geocodedAddress.lng,
+          });
+
+          // Ekrandaki mevcut sıra no görünümünü koru
           if (seq != null) {
             geocodedAddress = geocodedAddress.copyWith(
               address: '$seq - ${geocodedAddress.address}',
             );
           }
+
           if (mounted) {
-            _addAddressToPoolAndCards(geocodedAddress, prepend: false);
+            _addAddressToPoolAndCards(
+              geocodedAddress,
+              prepend: false,
+            );
             added++;
           }
         } catch (e) {
-          // Devam et, bu spesifik adres başarısız olsa da diğerlerine geç
+          // Tek bir adres hata verirse diğer adreslere devam et.
         }
-        await Future.delayed(
-          useBulkFast
-              ? Duration(milliseconds: _tomtomDelayMs)
-              : nominatimDelay,
-        );
+
+        // Sadece gerçek geocoding çağrıları arasında beklemek gerekiyor.
+        // Cache'den okunan adresler için gereksiz bekleme yapmıyoruz.
+        final originalAddress = addressesToProcess[i];
+
+        if (!cachedCoordinates.containsKey(originalAddress)) {
+          await Future.delayed(
+            useBulkFast
+                ? Duration(milliseconds: _tomtomDelayMs)
+                : nominatimDelay,
+          );
+        }
+      }
+
+      if (localPatients.isNotEmpty) {
+        try {
+          final localResponse = await http.post(
+            Uri.parse('http://127.0.0.1:3100/patients/import'),
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({
+              'fileName': pickedFile.name,
+              'patients': localPatients,
+            }),
+          );
+
+          if (localResponse.statusCode < 200 ||
+              localResponse.statusCode >= 300) {
+            throw Exception(
+              'Local backend ${localResponse.statusCode}: ${localResponse.body}',
+            );
+          }
+        } catch (e) {
+          if (progressDialogContext != null && progressDialogContext!.mounted) {
+            Navigator.of(progressDialogContext!).pop();
+            progressDialogContext = null;
+          }
+
+          if (!mounted) return;
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Adresler işlendi ancak lokal veritabanına kaydedilemedi: $e',
+              ),
+              duration: const Duration(seconds: 6),
+            ),
+          );
+
+          return;
+        }
       }
 
       if (!mounted) return;
@@ -997,8 +1223,11 @@ class _HomePageState extends State<HomePage> {
       }
 
       final message = added == addressesToProcess.length
-          ? '✅ $added adres CSV\'den başarıyla harita üzerine konumlandırıldı!'
-          : '⚠️ $added / ${addressesToProcess.length} adres konumlandırıldı (Bazı adresler geocode edilemedi)';
+          ? '✅ $added adres başarıyla işlendi. '
+              '$cacheHits adres lokal cache\'den alındı, '
+              '$geocodedCount adres geocode edildi.'
+          : '⚠️ $added / ${addressesToProcess.length} adres işlendi. '
+              '$cacheHits cache, $geocodedCount geocode.';
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(message), duration: const Duration(seconds: 4)),
@@ -1462,7 +1691,8 @@ class _Sidebar extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: _T.accent.withValues(alpha: 0.18),
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: _T.accent.withValues(alpha: 0.35)),
+                    border:
+                        Border.all(color: _T.accent.withValues(alpha: 0.35)),
                   ),
                   child: const Center(
                     child: Text(
@@ -2497,7 +2727,8 @@ class _QueuePanel extends StatelessWidget {
                       ),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: _T.accent,
-                        side: BorderSide(color: _T.accent.withValues(alpha: 0.35)),
+                        side: BorderSide(
+                            color: _T.accent.withValues(alpha: 0.35)),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
                         ),
@@ -2912,7 +3143,8 @@ class _DropHereState extends StatelessWidget {
           decoration: BoxDecoration(
             color: _T.accent.withValues(alpha: 0.12),
             shape: BoxShape.circle,
-            border: Border.all(color: _T.accent.withValues(alpha: 0.4), width: 2),
+            border:
+                Border.all(color: _T.accent.withValues(alpha: 0.4), width: 2),
           ),
           child: const Icon(
             Icons.add_location_alt_rounded,
@@ -2932,7 +3164,8 @@ class _DropHereState extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           'Rota kuyruğuna eklenecek',
-          style: TextStyle(color: _T.accent.withValues(alpha: 0.7), fontSize: 12.5),
+          style: TextStyle(
+              color: _T.accent.withValues(alpha: 0.7), fontSize: 12.5),
         ),
       ],
     );
@@ -3159,7 +3392,8 @@ class _RouteLinePainter extends CustomPainter {
     canvas.drawPath(path, paint);
 
     // Nokta efektleri
-    final dotPaint = Paint()..color = const Color(0xFF53D6FF).withValues(alpha: 0.4);
+    final dotPaint = Paint()
+      ..color = const Color(0xFF53D6FF).withValues(alpha: 0.4);
     canvas.drawCircle(
       Offset(size.width * 0.45, size.height * 0.46),
       2.5,
@@ -3615,7 +3849,8 @@ class _RouteResultDialog extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: _T.accent.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: _T.accent.withValues(alpha: 0.3)),
+                      border:
+                          Border.all(color: _T.accent.withValues(alpha: 0.3)),
                     ),
                     child: const Icon(
                       Icons.alt_route_rounded,
@@ -3836,7 +4071,8 @@ class _RouteResultDialog extends StatelessWidget {
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(
                                   color: isStart
-                                      ? const Color(0xFF66BB6A).withValues(alpha: 0.3)
+                                      ? const Color(0xFF66BB6A)
+                                          .withValues(alpha: 0.3)
                                       : isEnd
                                           ? _T.accent.withValues(alpha: 0.2)
                                           : _T.stroke,
@@ -3900,7 +4136,8 @@ class _RouteResultDialog extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: const Color(0xFFFFF3E0),
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+                    border:
+                        Border.all(color: Colors.orange.withValues(alpha: 0.3)),
                   ),
                   child: Row(
                     children: [
