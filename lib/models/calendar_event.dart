@@ -59,4 +59,20 @@ class VisitPlanItem {
       note: (note == null && keepNoteWhenNull) ? this.note : note,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'title': title,
+    'seriesId': seriesId,
+    'repeat': repeat.name,
+    'note': note,
+  };
+
+  factory VisitPlanItem.fromJson(Map<String, dynamic> json) {
+    return VisitPlanItem(
+      title: json['title'] as String,
+      seriesId: json['seriesId'] as String,
+      repeat: RepeatType.values.byName(json['repeat'] as String? ?? 'none'),
+      note: json['note'] as String?,
+    );
+  }
 }

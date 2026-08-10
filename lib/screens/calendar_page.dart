@@ -279,6 +279,11 @@ class _CalendarPageState extends State<CalendarPage>
       _showRecalcBanner(
         'Rota yeniden hesaplanıyor: Başlangıç → $movedTitle → kalan adresler → Bitiş',
       );
+      // Banner "yeniden hesaplanıyor" diyor ama bu çağrılar eksikti — kalan
+      // duraklar gerçekte optimize edilmeden, sürüklenmiş ham sırada
+      // kalıyordu.
+      _optimizeShiftForDay(dayKey, shift);
+      _fleetState.markDirty();
     } else if (previousForced == movedTitle) {
       // Önceden zorunlu ilk durak olan adres artık ilk sırada değilse constraint'i kaldır.
       _setForcedFirstTitle(dayKey, shift, null);

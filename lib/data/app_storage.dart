@@ -126,10 +126,14 @@ class AppStorage {
     // Önce eski sistem gibi local'e kaydet
     await prefs.setString(_keyRoutes, jsonEncode(records));
 
-    // En son oluşturulan rotayı backend'e gönder (koordinatlı duraklarla)
-    if (allRecords.isNotEmpty) {
+    // En son oluşturulan rotayı backend'e gönder (koordinatlı duraklarla).
+    // user_id yoksa misafir modundayız demektir (bkz. AuthService.
+    // continueAsGuest) — önceden buradaki "?? 1" düşüşü yüzünden misafir
+    // verisi backend'deki gerçek hesap #1'in üzerine sessizce yazılıyordu.
+    // Artık misafir için backend'e hiç gönderilmiyor, sadece yerelde kalıyor.
+    final userId = prefs.getInt("user_id");
+    if (allRecords.isNotEmpty && userId != null) {
       final lastRoute = allRecords.first;
-      final userId = prefs.getInt("user_id") ?? 1;
 
       final stops = lastRoute.stops ?? const <Address>[];
       final stopsJson = stops
@@ -259,13 +263,36 @@ class AppStorage {
         'repeatByAddress': ws.repeatByAddress.map(
           (k, v) => MapEntry(k, v.index),
         ),
+        // Takvim verisi (planByDay/forcedFirstStopByDay) daha önce hiç
+        // kaydedilmiyordu — sekme kapatılıp açıldığında ya da .exe yeniden
+        // başlatıldığında tüm planlanmış ziyaretler sessizce kayboluyordu.
+        'planByDay': ws.planByDay.map(
+          (day, shifts) => MapEntry(
+            day.toIso8601String(),
+            shifts.map(
+              (shift, items) => MapEntry(
+                shift.name,
+                items.map((i) => i.toJson()).toList(),
+              ),
+            ),
+          ),
+        ),
+        'forcedFirstStopByDay': ws.forcedFirstStopByDay.map(
+          (day, shifts) => MapEntry(
+            day.toIso8601String(),
+            shifts.map((shift, title) => MapEntry(shift.name, title)),
+          ),
+        ),
       };
     }
     await prefs.setString(_keyFleet, jsonEncode(data));
 
     // Backend'e gönderimi 3sn debounce ederek art arda gelen aksiyonları
-    // (adres ekle/sil vb.) tek istekte topla.
-    final userId = prefs.getInt("user_id") ?? 1;
+    // (adres ekle/sil vb.) tek istekte topla. user_id yoksa misafir
+    // modundayız — misafir verisi artık backend'deki gerçek bir hesabın
+    // üzerine yazılmasın diye backend'e hiç gönderilmiyor.
+    final userId = prefs.getInt("user_id");
+    if (userId == null) return;
     _fleetPushTimer?.cancel();
     _fleetPushTimer = Timer(const Duration(seconds: 3), () async {
       try {
@@ -317,11 +344,40 @@ class AppStorage {
           (k, v) => MapEntry(k, RepeatType.values[v as int]),
         );
 
+        final planByDayRaw = m['planByDay'] as Map<String, dynamic>? ?? {};
+        final planByDay = <DateTime, Map<ShiftType, List<VisitPlanItem>>>{};
+        for (final dayEntry in planByDayRaw.entries) {
+          final day = DateTime.parse(dayEntry.key);
+          final shiftsRaw = dayEntry.value as Map<String, dynamic>;
+          planByDay[day] = shiftsRaw.map(
+            (shiftName, itemsRaw) => MapEntry(
+              ShiftType.values.byName(shiftName),
+              (itemsRaw as List)
+                  .map((e) => VisitPlanItem.fromJson(e as Map<String, dynamic>))
+                  .toList(),
+            ),
+          );
+        }
+
+        final forcedRaw =
+            m['forcedFirstStopByDay'] as Map<String, dynamic>? ?? {};
+        final forcedFirstStopByDay = <DateTime, Map<ShiftType, String?>>{};
+        for (final dayEntry in forcedRaw.entries) {
+          final day = DateTime.parse(dayEntry.key);
+          final shiftsRaw = dayEntry.value as Map<String, dynamic>;
+          forcedFirstStopByDay[day] = shiftsRaw.map(
+            (shiftName, title) =>
+                MapEntry(ShiftType.values.byName(shiftName), title as String?),
+          );
+        }
+
         fleet[vid] = VehicleWorkspace(
           id: vid,
           fixedHomeAddress: fixedHome,
           dropped: dropped,
           repeatByAddress: repeatByAddress,
+          planByDay: planByDay,
+          forcedFirstStopByDay: forcedFirstStopByDay,
         );
       }
     } catch (_) {}
