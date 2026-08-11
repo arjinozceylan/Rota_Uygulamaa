@@ -9,6 +9,7 @@ import 'auth_service.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:excel/excel.dart' as xls;
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 
@@ -911,23 +912,74 @@ class _HomePageState extends State<HomePage> {
     return s.isEmpty ? raw.trim() : s;
   }
 
-  // ── CSV import ────────────────────────────────────────────────────────────
+  // Windows Türkçe Excel'in "CSV (virgülle ayrılmış)" çıktısı UTF-8 değil,
+  // Windows-1254 (ANSI) — ç/ğ/ı/ö/ş/ü UTF-8'de geçersiz byte dizisi
+  // oluşturup FormatException fırlatır. Windows-1254, Latin-1'den yalnızca
+  // Türkçe'ye özgü 6 baytta (Ğ/İ/Ş/ğ/ı/ş) ayrılır; geri kalanı birebir aynı
+  // olduğundan UTF-8 başarısız olursa bu 6 baytı düzeltip devam ederiz.
+  String _decodeCsvBytes(Uint8List bytes) {
+    try {
+      return utf8.decode(bytes);
+    } on FormatException {
+      const turkishRemap = <int, int>{
+        0xD0: 0x011E, // Ğ
+        0xDD: 0x0130, // İ
+        0xDE: 0x015E, // Ş
+        0xF0: 0x011F, // ğ
+        0xFD: 0x0131, // ı
+        0xFE: 0x015F, // ş
+      };
+      return String.fromCharCodes(bytes.map((b) => turkishRemap[b] ?? b));
+    }
+  }
+
+  // .xlsx/.xls dosyasını satır/hücre listesine çevirir (ilk dolu sayfa
+  // kullanılır). Hücre tipi ne olursa olsun (metin/sayı/tarih) düz metne
+  // çevrilir; adres sütunu tespiti ve geri kalan işlem CSV ile aynı akışı
+  // kullanır.
+  List<List<String>> _parseExcelRows(Uint8List bytes) {
+    final workbook = xls.Excel.decodeBytes(bytes);
+    for (final sheetName in workbook.tables.keys) {
+      final sheet = workbook.tables[sheetName];
+      if (sheet == null || sheet.maxRows == 0) continue;
+      final rows = sheet.rows
+          .map(
+            (row) => row
+                .map((cell) => cell?.value?.toString().trim() ?? '')
+                .toList(),
+          )
+          .toList();
+      while (rows.isNotEmpty && rows.first.every((c) => c.isEmpty)) {
+        rows.removeAt(0);
+      }
+      if (rows.isNotEmpty) return rows;
+    }
+    return [];
+  }
+
+  // ── CSV / Excel import ──────────────────────────────────────────────────
   Future<void> _importAddressesFromExcel() async {
     BuildContext? progressDialogContext;
     try {
       final isMacDesktop = !kIsWeb && Platform.isMacOS;
       final result = await FilePicker.platform.pickFiles(
         type: isMacDesktop ? FileType.any : FileType.custom,
-        allowedExtensions: isMacDesktop ? null : const ['csv'],
+        allowedExtensions: isMacDesktop ? null : const ['csv', 'xlsx', 'xls'],
         withData: true,
       );
       if (!mounted) return;
       if (result == null || result.files.isEmpty) return;
       final pickedFile = result.files.first;
       final fileName = pickedFile.name.toLowerCase();
-      if (!fileName.endsWith('.csv')) {
+      final isCsv = fileName.endsWith('.csv');
+      final isExcel = fileName.endsWith('.xlsx') || fileName.endsWith('.xls');
+      if (!isCsv && !isExcel) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Lütfen .csv uzantılı bir dosya seçin')),
+          const SnackBar(
+            content: Text(
+              'Lütfen .csv, .xlsx veya .xls uzantılı bir dosya seçin',
+            ),
+          ),
         );
         return;
       }
@@ -944,19 +996,38 @@ class _HomePageState extends State<HomePage> {
         bytes = await File(path).readAsBytes();
       }
       if (!mounted) return;
-      final text = utf8.decode(bytes);
-      final lines = const LineSplitter().convert(text);
-      if (lines.isEmpty) {
+
+      // Dosya biçiminden bağımsız ortak yapı: satır[0] başlık, geri kalanı
+      // veri satırları. Adres/sıra no sütunu tespiti bunun üzerinden çalışır.
+      List<List<String>> rows;
+      var sep = ',';
+      if (isExcel) {
+        rows = _parseExcelRows(bytes);
+      } else {
+        final text = _decodeCsvBytes(bytes);
+        final lines = const LineSplitter().convert(text);
+        if (lines.isEmpty) {
+          rows = const [];
+        } else {
+          final header = lines.first;
+          final commaCount = ','.allMatches(header).length;
+          final semiCount = ';'.allMatches(header).length;
+          sep = semiCount > commaCount ? ';' : ',';
+          rows = lines
+              .where((l) => l.trim().isNotEmpty)
+              .map((l) => _parseCsvLine(l, sep))
+              .toList();
+        }
+      }
+
+      if (rows.isEmpty) {
+        if (!mounted) return;
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text('CSV boş')));
+        ).showSnackBar(const SnackBar(content: Text('Dosya boş')));
         return;
       }
-      final header = lines.first;
-      final commaCount = ','.allMatches(header).length;
-      final semiCount = ';'.allMatches(header).length;
-      final sep = semiCount > commaCount ? ';' : ',';
-      final headerCols = _parseCsvLine(header, sep);
+      final headerCols = rows.first;
 
       // Adres sütununu başlığa göre bul. TC No, hasta adı-soyadı, irtibat,
       // başvuru/ziyaret tarihi, uygunluk durumu gibi hassas sütunlar hiç
@@ -974,10 +1045,8 @@ class _HomePageState extends State<HomePage> {
       // Adres + sıra no'yu satır sırasıyla topla — bu sıra asla değiştirilmez.
       final addressesToProcess = <String>[];
       final sequencesToProcess = <String?>[];
-      for (final line in lines.skip(1)) {
-        final raw = line.trim();
-        if (raw.isEmpty) continue;
-        final cols = _parseCsvLine(raw, sep);
+      for (final cols in rows.skip(1)) {
+        if (cols.every((c) => c.trim().isEmpty)) continue;
         String addressText;
         if (addressColIndex == headerCols.length - 1 &&
             cols.length > headerCols.length) {
@@ -1001,7 +1070,9 @@ class _HomePageState extends State<HomePage> {
 
       if (addressesToProcess.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('CSV\'de işlenecek adres bulunamadı')),
+          const SnackBar(
+            content: Text('Dosyada işlenecek adres bulunamadı'),
+          ),
         );
         return;
       }
@@ -1244,7 +1315,7 @@ class _HomePageState extends State<HomePage> {
       }
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('CSV yükleme hatası: $e')));
+      ).showSnackBar(SnackBar(content: Text('Dosya yükleme hatası: $e')));
     }
   }
 
@@ -1510,22 +1581,66 @@ class _HomePageState extends State<HomePage> {
                     children: [
                       const Expanded(child: VehicleSelectorBar()),
                       const SizedBox(width: 14),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            _fleetState.activeVehicle.label,
-                            style: const TextStyle(
-                              color: _T.textDark,
-                              fontWeight: FontWeight.w900,
-                              fontSize: 15,
+                      // Bu kart, soldaki "Araç 1-5" sekmelerinden hangisi
+                      // seçiliyse ONA ait sürücü atamasını gösterir — ayrı
+                      // bir araç seçici DEĞİL. Araç değişimi hâlâ tamamen
+                      // soldaki sekmelerden yapılır; buradaki dropdown sadece
+                      // seçili araca personel atamak içindir.
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.05),
+                              blurRadius: 16,
+                              offset: const Offset(0, 6),
                             ),
-                          ),
-                          const SizedBox(height: 6),
-                          VehicleDriverAssignment(
-                            vehicleId: _fleetState.activeVehicle,
-                          ),
-                        ],
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.local_shipping_rounded,
+                                  size: 14,
+                                  color: _T.textDark,
+                                ),
+                                const SizedBox(width: 5),
+                                Text(
+                                  'Seçili: ${_fleetState.activeVehicle.label}',
+                                  style: const TextStyle(
+                                    color: _T.textDark,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            const Text(
+                              'Bu araca atanan sürücü',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF8A96AA),
+                                letterSpacing: 0.2,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            VehicleDriverAssignment(
+                              vehicleId: _fleetState.activeVehicle,
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),

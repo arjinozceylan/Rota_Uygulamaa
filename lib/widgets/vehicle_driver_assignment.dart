@@ -21,6 +21,7 @@ class VehicleDriverAssignment extends StatefulWidget {
 
 class _VehicleDriverAssignmentState extends State<VehicleDriverAssignment> {
   bool _loading = true;
+  bool _loadFailed = false;
   List<Map<String, dynamic>> _drivers = [];
   int? _assignedUserId;
 
@@ -50,7 +51,10 @@ class _VehicleDriverAssignmentState extends State<VehicleDriverAssignment> {
   }
 
   Future<void> _load() async {
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _loadFailed = false;
+    });
     try {
       final response = await http.get(
         Uri.parse('${AuthService.baseUrl}/users/drivers'),
@@ -72,11 +76,17 @@ class _VehicleDriverAssignmentState extends State<VehicleDriverAssignment> {
       } else {
         AuthService.flagIfSessionError(response.body);
         if (!mounted) return;
-        setState(() => _loading = false);
+        setState(() {
+          _loading = false;
+          _loadFailed = true;
+        });
       }
     } catch (_) {
       if (!mounted) return;
-      setState(() => _loading = false);
+      setState(() {
+        _loading = false;
+        _loadFailed = true;
+      });
     }
   }
 
@@ -151,10 +161,50 @@ class _VehicleDriverAssignmentState extends State<VehicleDriverAssignment> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const SizedBox(
-        height: 20,
-        width: 20,
-        child: CircularProgressIndicator(strokeWidth: 2),
+      return const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            height: 16,
+            width: 16,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          SizedBox(width: 8),
+          Text(
+            'Sürücüler yükleniyor...',
+            style: TextStyle(fontSize: 11.5, color: Color(0xFF5A6A85)),
+          ),
+        ],
+      );
+    }
+
+    if (_loadFailed) {
+      return InkWell(
+        onTap: _load,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFF1F0),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFFF3B4AE)),
+          ),
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.error_outline_rounded, size: 15, color: Color(0xFFC0392B)),
+              SizedBox(width: 6),
+              Text(
+                'Sürücü listesi yüklenemedi — tekrar dene',
+                style: TextStyle(
+                  fontSize: 11.5,
+                  color: Color(0xFFC0392B),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
       );
     }
 
@@ -162,20 +212,28 @@ class _VehicleDriverAssignmentState extends State<VehicleDriverAssignment> {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
-            color: const Color(0xFFF8FAFC),
+            color: Colors.white,
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: const Color(0xFFD8E1EC)),
+            border: Border.all(color: const Color(0xFF3DBFDB), width: 1.3),
           ),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<int?>(
               value: _assignedUserId,
               isDense: true,
-              icon: const Icon(Icons.arrow_drop_down_rounded, size: 18),
+              icon: const Icon(
+                Icons.arrow_drop_down_rounded,
+                size: 18,
+                color: Color(0xFF1A3A5C),
+              ),
               hint: const Text(
-                'Personel ata',
-                style: TextStyle(fontSize: 11.5, color: Color(0xFF6B7A8D)),
+                'Sürücü ata',
+                style: TextStyle(
+                  fontSize: 11.5,
+                  color: Color(0xFF1A3A5C),
+                  fontWeight: FontWeight.w700,
+                ),
               ),
               style: const TextStyle(
                 fontSize: 11.5,
