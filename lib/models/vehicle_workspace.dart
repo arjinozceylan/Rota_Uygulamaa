@@ -1,44 +1,35 @@
-
-
-
 import '../core/models/address.dart';
 import 'calendar_event.dart';
 
-/// Uygulamadaki 5 araç için sabit kimlikler.
+/// Backend'deki bir sürücü hesabının web panelindeki karşılığı.
 ///
-/// İleride UI'da buton / sekme / chip olarak göstereceğiz.
-enum VehicleId {
-  vehicle1,
-  vehicle2,
-  vehicle3,
-  vehicle4,
-  vehicle5,
+/// Önceden burada sabit 5 "araç" slotu vardı ve her birine ayrıca bir
+/// sürücü atanıyordu; mobil uygulama zaten her zaman doğrudan sürücünün
+/// kendi hesabı üzerinden çalıştığı için bu ekstra katman kaldırıldı —
+/// artık web panelindeki sekmelerin her biri doğrudan bir sürücüyü temsil
+/// eder.
+class Driver {
+  const Driver({required this.id, required this.username});
+
+  final int id;
+  final String username;
+
+  String get label => username;
+
+  @override
+  bool operator ==(Object other) => other is Driver && other.id == id;
+
+  @override
+  int get hashCode => id.hashCode;
 }
 
-extension VehicleIdX on VehicleId {
-  String get label {
-    switch (this) {
-      case VehicleId.vehicle1:
-        return 'Araç 1';
-      case VehicleId.vehicle2:
-        return 'Araç 2';
-      case VehicleId.vehicle3:
-        return 'Araç 3';
-      case VehicleId.vehicle4:
-        return 'Araç 4';
-      case VehicleId.vehicle5:
-        return 'Araç 5';
-    }
-  }
-}
-
-/// Tek bir aracın çalışma alanı / state'i.
+/// Tek bir sürücünün çalışma alanı / state'i.
 ///
 /// Ortak adres havuzu bu modelin DIŞINDA kalır.
-/// Bu model sadece araç bazlı tutulması gereken verileri içerir.
+/// Bu model sadece sürücü bazlı tutulması gereken verileri içerir.
 class VehicleWorkspace {
   VehicleWorkspace({
-    required this.id,
+    required this.driver,
     this.fixedHomeAddress,
     List<String>? dropped,
     Map<String, RepeatType>? repeatByAddress,
@@ -50,7 +41,9 @@ class VehicleWorkspace {
        forcedFirstStopByDay =
            forcedFirstStopByDay ?? <DateTime, Map<ShiftType, String?>>{};
 
-  final VehicleId id;
+  final Driver driver;
+
+  int get driverId => driver.id;
 
   /// Sabit ev / başlangıç / bitiş noktası
   Address? fixedHomeAddress;
@@ -76,7 +69,7 @@ class VehicleWorkspace {
   /// UI'da kolay kullanım için güvenli kopya üretir.
   VehicleWorkspace copy() {
     return VehicleWorkspace(
-      id: id,
+      driver: driver,
       fixedHomeAddress: fixedHomeAddress,
       dropped: List<String>.from(dropped),
       repeatByAddress: Map<String, RepeatType>.from(repeatByAddress),
@@ -92,12 +85,5 @@ class VehicleWorkspace {
           entry.key: Map<ShiftType, String?>.from(entry.value),
       },
     );
-  }
-
-  /// Fabrika: 5 aracın başlangıç workspace'lerini üretmek için kullanışlı.
-  static Map<VehicleId, VehicleWorkspace> createInitialFleet() {
-    return {
-      for (final id in VehicleId.values) id: VehicleWorkspace(id: id),
-    };
   }
 }

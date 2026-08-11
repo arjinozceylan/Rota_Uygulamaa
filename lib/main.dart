@@ -25,7 +25,7 @@ void main() async {
 
   runApp(
     ChangeNotifierProvider(
-      create: (_) => FleetState(fleet: stored.fleet),
+      create: (_) => FleetState(initialFleet: stored.fleet),
       child: MyApp(initialAddressCards: stored.addressCards),
     ),
   );

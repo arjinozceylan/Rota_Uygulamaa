@@ -17,7 +17,6 @@ import '../core/models/address.dart';
 import '../data/address_store.dart';
 import '../data/app_storage.dart';
 import '../data/uploaded_files_store.dart';
-import '../widgets/vehicle_driver_assignment.dart';
 import '../models/calendar_event.dart';
 import '../models/vehicle_workspace.dart';
 import 'fleet_state.dart';
@@ -143,7 +142,10 @@ class _HomePageState extends State<HomePage> {
   double _summaryTotalKm = 0;
   bool _summaryHasData = false;
 
-  VehicleWorkspace get _currentWorkspace => _fleetState.activeWorkspace;
+  // build(), sürücü listesi yüklenene kadar (bkz. _loadDriversAndSync)
+  // erken bir "yükleniyor" ekranı döndürüyor — bu getter'a sadece liste
+  // dolduktan sonra erişilir, bu yüzden güvenle non-null varsayılabilir.
+  VehicleWorkspace get _currentWorkspace => _fleetState.activeWorkspace!;
 
   FleetState get _fleetState => context.read<FleetState>();
 
@@ -156,6 +158,37 @@ class _HomePageState extends State<HomePage> {
       addressCards: addressCards,
       fleet: context.read<FleetState>().fleetView,
     );
+  }
+
+  // Backend'deki güncel sürücü hesap listesini çeker ve FleetState'i onunla
+  // senkronize eder. Eskiden sabit 5 "araç" vardı; artık sekmeler doğrudan
+  // gerçek sürücü hesaplarını (sürücü1..sürücüN) yansıtıyor.
+  Future<void> _loadDriversAndSync() async {
+    try {
+      final response = await http.get(
+        Uri.parse('${AuthService.baseUrl}/users/drivers'),
+        headers: await AuthService.authHeaders(),
+      );
+      if (!mounted) return;
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as List;
+        final drivers = data
+            .cast<Map<String, dynamic>>()
+            .map(
+              (d) => Driver(
+                id: d['id'] as int,
+                username: d['username'].toString(),
+              ),
+            )
+            .toList();
+        context.read<FleetState>().syncDrivers(drivers);
+      } else {
+        AuthService.flagIfSessionError(response.body);
+      }
+    } catch (_) {
+      // Sessizce geç — ekranda "Sürücüler yükleniyor..." görünmeye devam
+      // eder, sayfa yeniden açıldığında tekrar denenir.
+    }
   }
 
   @override
@@ -173,6 +206,8 @@ class _HomePageState extends State<HomePage> {
 
     _searchCtrl.addListener(_onSearchChanged);
     AppStorage.instance.onSyncError = _showSyncErrorSnackBar;
+
+    _loadDriversAndSync();
 
     // Local SQLite'taki aktif adresleri uygulama açılırken geri yükle
     _loadPatientsFromLocalDatabase();
@@ -1439,7 +1474,7 @@ class _HomePageState extends State<HomePage> {
           totalMin: totalMin,
           totalKm: totalKm,
           path: path,
-          vehicleId: _fleetState.activeVehicle,
+          driverId: _fleetState.activeDriverId,
           stops: stops,
         ),
       );
@@ -1455,8 +1490,8 @@ class _HomePageState extends State<HomePage> {
 
       // ── Rota kaydedildi bildirimi ────────────────────────────────────
       final routeNo = RouteStore.instance
-          .recordsForVehicle(
-            _fleetState.activeVehicle,
+          .recordsForDriver(
+            _fleetState.activeDriverId!,
           )
           .length;
       ScaffoldMessenger.of(context).clearSnackBars();
@@ -1519,7 +1554,25 @@ class _HomePageState extends State<HomePage> {
   // ─────────────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    context.watch<FleetState>();
+    final fleet = context.watch<FleetState>();
+    if (fleet.drivers.isEmpty) {
+      return const Scaffold(
+        backgroundColor: _T.bg,
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text(
+                'Sürücüler yükleniyor...',
+                style: TextStyle(color: _T.textMid, fontSize: 13),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     return Scaffold(
       backgroundColor: _T.bg,
       body: Row(
@@ -1581,11 +1634,6 @@ class _HomePageState extends State<HomePage> {
                     children: [
                       const Expanded(child: VehicleSelectorBar()),
                       const SizedBox(width: 14),
-                      // Bu kart, soldaki "Araç 1-5" sekmelerinden hangisi
-                      // seçiliyse ONA ait sürücü atamasını gösterir — ayrı
-                      // bir araç seçici DEĞİL. Araç değişimi hâlâ tamamen
-                      // soldaki sekmelerden yapılır; buradaki dropdown sadece
-                      // seçili araca personel atamak içindir.
                       Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 14,
@@ -1603,41 +1651,22 @@ class _HomePageState extends State<HomePage> {
                             ),
                           ],
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(
-                                  Icons.local_shipping_rounded,
-                                  size: 14,
-                                  color: _T.textDark,
-                                ),
-                                const SizedBox(width: 5),
-                                Text(
-                                  'Seçili: ${_fleetState.activeVehicle.label}',
-                                  style: const TextStyle(
-                                    color: _T.textDark,
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              ],
+                            const Icon(
+                              Icons.person_rounded,
+                              size: 14,
+                              color: _T.textDark,
                             ),
-                            const SizedBox(height: 2),
-                            const Text(
-                              'Bu araca atanan sürücü',
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF8A96AA),
-                                letterSpacing: 0.2,
+                            const SizedBox(width: 5),
+                            Text(
+                              'Seçili sürücü: ${_currentWorkspace.driver.label}',
+                              style: const TextStyle(
+                                color: _T.textDark,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 13,
                               ),
-                            ),
-                            const SizedBox(height: 8),
-                            VehicleDriverAssignment(
-                              vehicleId: _fleetState.activeVehicle,
                             ),
                           ],
                         ),

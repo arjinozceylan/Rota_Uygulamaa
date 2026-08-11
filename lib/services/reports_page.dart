@@ -6,8 +6,6 @@ import '../core/models/address.dart';
 import '../models/vehicle_workspace.dart';
 import '../services/fleet_state.dart';
 
-enum _ReportTarget { all, vehicle1, vehicle2, vehicle3, vehicle4, vehicle5 }
-
 // ─────────────────────────────────────────────────────────────────────────────
 // MODEL — Rota Kaydı
 // ─────────────────────────────────────────────────────────────────────────────
@@ -16,7 +14,7 @@ class RouteRecord {
   final int totalMin;
   final double totalKm;
   final List<String> path; // sıralı adres listesi
-  final VehicleId? vehicleId;
+  final int? driverId;
 
   /// Koordinat dahil sıralı duraklar (mobil senkronizasyonu için).
   /// `path` ile aynı sırada ama tam Address bilgisini (lat/lng) taşır.
@@ -27,7 +25,7 @@ class RouteRecord {
     required this.totalMin,
     required this.totalKm,
     required this.path,
-    this.vehicleId,
+    this.driverId,
     this.stops,
   });
 
@@ -82,9 +80,7 @@ class RouteStore {
   static final RouteStore instance = RouteStore._();
 
   final List<RouteRecord> _legacyRecords = [];
-  final Map<VehicleId, List<RouteRecord>> _vehicleRecords = {
-    for (final id in VehicleId.values) id: <RouteRecord>[],
-  };
+  final Map<int, List<RouteRecord>> _driverRecords = {};
 
   /// Geriye uyumluluk: tüm kayıtların birleşik görünümü
   List<RouteRecord> get records => allRecords;
@@ -92,20 +88,20 @@ class RouteStore {
   List<RouteRecord> get allRecords {
     return [
       ..._legacyRecords,
-      for (final id in VehicleId.values) ..._vehicleRecords[id]!,
+      for (final list in _driverRecords.values) ...list,
     ]..sort((a, b) => b.createdAt.compareTo(a.createdAt));
   }
 
-  List<RouteRecord> recordsForVehicle(VehicleId id) {
-    return List<RouteRecord>.from(_vehicleRecords[id]!)
+  List<RouteRecord> recordsForDriver(int driverId) {
+    return List<RouteRecord>.from(_driverRecords[driverId] ?? const [])
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
   }
 
-  ReportDataset _datasetForTarget(_ReportTarget target) {
-    if (target == _ReportTarget.all) {
+  ReportDataset datasetForDriver(int? driverId) {
+    if (driverId == null) {
       return ReportDataset(allRecords);
     }
-    return ReportDataset(recordsForVehicle(_vehicleFromTargetStatic(target)));
+    return ReportDataset(recordsForDriver(driverId));
   }
 
   bool _isDuplicate(RouteRecord r, List<RouteRecord> list) {
@@ -119,13 +115,13 @@ class RouteStore {
   }
 
   void add(RouteRecord r) {
-    if (r.vehicleId == null) {
+    if (r.driverId == null) {
       if (!_isDuplicate(r, _legacyRecords)) {
         _legacyRecords.insert(0, r);
       }
       return;
     }
-    final list = _vehicleRecords[r.vehicleId!]!;
+    final list = _driverRecords.putIfAbsent(r.driverId!, () => <RouteRecord>[]);
     if (!_isDuplicate(r, list)) {
       list.insert(0, r);
     }
@@ -133,30 +129,11 @@ class RouteStore {
 
   void clear() {
     _legacyRecords.clear();
-    for (final id in VehicleId.values) {
-      _vehicleRecords[id]!.clear();
-    }
+    _driverRecords.clear();
   }
 
-  void clearVehicle(VehicleId id) {
-    _vehicleRecords[id]!.clear();
-  }
-
-  static VehicleId _vehicleFromTargetStatic(_ReportTarget target) {
-    switch (target) {
-      case _ReportTarget.vehicle1:
-        return VehicleId.vehicle1;
-      case _ReportTarget.vehicle2:
-        return VehicleId.vehicle2;
-      case _ReportTarget.vehicle3:
-        return VehicleId.vehicle3;
-      case _ReportTarget.vehicle4:
-        return VehicleId.vehicle4;
-      case _ReportTarget.vehicle5:
-        return VehicleId.vehicle5;
-      case _ReportTarget.all:
-        return VehicleId.vehicle1;
-    }
+  void clearDriver(int driverId) {
+    _driverRecords[driverId]?.clear();
   }
 }
 
@@ -193,39 +170,14 @@ class _ReportsPageState extends State<ReportsPage>
     with SingleTickerProviderStateMixin {
   late TabController _tab;
   final _store = RouteStore.instance;
-  _ReportTarget _target = _ReportTarget.all;
-  VehicleId _vehicleFromTarget(_ReportTarget target) {
-    switch (target) {
-      case _ReportTarget.vehicle1:
-        return VehicleId.vehicle1;
-      case _ReportTarget.vehicle2:
-        return VehicleId.vehicle2;
-      case _ReportTarget.vehicle3:
-        return VehicleId.vehicle3;
-      case _ReportTarget.vehicle4:
-        return VehicleId.vehicle4;
-      case _ReportTarget.vehicle5:
-        return VehicleId.vehicle5;
-      case _ReportTarget.all:
-        return VehicleId.vehicle1;
-    }
-  }
 
-  String _targetLabel(_ReportTarget target) {
-    switch (target) {
-      case _ReportTarget.all:
-        return 'Tümü';
-      case _ReportTarget.vehicle1:
-        return VehicleId.vehicle1.label;
-      case _ReportTarget.vehicle2:
-        return VehicleId.vehicle2.label;
-      case _ReportTarget.vehicle3:
-        return VehicleId.vehicle3.label;
-      case _ReportTarget.vehicle4:
-        return VehicleId.vehicle4.label;
-      case _ReportTarget.vehicle5:
-        return VehicleId.vehicle5.label;
-    }
+  /// null = "Tümü" (tüm sürücülerin ortak raporu), aksi halde seçili
+  /// sürücünün gerçek backend user_id'si.
+  int? _targetDriverId;
+
+  String _targetLabel(FleetState fleet, int? driverId) {
+    if (driverId == null) return 'Tümü';
+    return fleet.workspaceOf(driverId)?.driver.label ?? 'Sürücü $driverId';
   }
 
   @override
@@ -252,7 +204,7 @@ class _ReportsPageState extends State<ReportsPage>
   @override
   Widget build(BuildContext context) {
     final fleet = context.watch<FleetState>();
-    final dataset = _store._datasetForTarget(_target);
+    final dataset = _store.datasetForDriver(_targetDriverId);
 
     return Scaffold(
       backgroundColor: _C.bg,
@@ -268,12 +220,13 @@ class _ReportsPageState extends State<ReportsPage>
                   children: [
                     Expanded(
                       child: _CompactReportTargetBar(
-                        target: _target,
+                        drivers: fleet.drivers,
+                        selectedDriverId: _targetDriverId,
                         onChanged: (next) {
-                          if (next != _ReportTarget.all) {
-                            fleet.selectVehicle(_vehicleFromTarget(next));
+                          if (next != null) {
+                            fleet.selectDriver(next);
                           }
-                          setState(() => _target = next);
+                          setState(() => _targetDriverId = next);
                         },
                       ),
                     ),
@@ -292,7 +245,7 @@ class _ReportsPageState extends State<ReportsPage>
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           Text(
-                            _targetLabel(_target),
+                            _targetLabel(fleet, _targetDriverId),
                             style: const TextStyle(
                               color: _C.textDark,
                               fontWeight: FontWeight.w900,
@@ -315,9 +268,9 @@ class _ReportsPageState extends State<ReportsPage>
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  _target == _ReportTarget.all
-                      ? 'Şu an tüm araçların ortak rapor görünümü gösteriliyor.'
-                      : '${_targetLabel(_target)} için araç bazlı rapor görünümü gösteriliyor.',
+                  _targetDriverId == null
+                      ? 'Şu an tüm sürücülerin ortak rapor görünümü gösteriliyor.'
+                      : '${_targetLabel(fleet, _targetDriverId)} için sürücü bazlı rapor görünümü gösteriliyor.',
                   style: const TextStyle(
                     color: Color(0xFF5A6A85),
                     fontSize: 12.5,
@@ -372,7 +325,7 @@ class _ReportsPageState extends State<ReportsPage>
                           ),
                         ),
                         Text(
-                          '${dataset.totalRoutes} rota kaydı — ${_targetLabel(_target)}',
+                          '${dataset.totalRoutes} rota kaydı — ${_targetLabel(fleet, _targetDriverId)}',
                           style: TextStyle(
                             color: Colors.white.withValues(alpha: 0.45),
                             fontSize: 11.5,
@@ -401,12 +354,10 @@ class _ReportsPageState extends State<ReportsPage>
                                     backgroundColor: _C.red,
                                   ),
                                   onPressed: () {
-                                    if (_target == _ReportTarget.all) {
+                                    if (_targetDriverId == null) {
                                       _store.clear();
                                     } else {
-                                      _store.clearVehicle(
-                                        _vehicleFromTarget(_target),
-                                      );
+                                      _store.clearDriver(_targetDriverId!);
                                     }
                                     setState(() {});
                                     Navigator.pop(context);
@@ -1649,12 +1600,14 @@ class _ReportScopeChip extends StatelessWidget {
 
 class _CompactReportTargetBar extends StatelessWidget {
   const _CompactReportTargetBar({
-    required this.target,
+    required this.drivers,
+    required this.selectedDriverId,
     required this.onChanged,
   });
 
-  final _ReportTarget target;
-  final ValueChanged<_ReportTarget> onChanged;
+  final List<Driver> drivers;
+  final int? selectedDriverId;
+  final ValueChanged<int?> onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -1678,39 +1631,17 @@ class _CompactReportTargetBar extends StatelessWidget {
           children: [
             _ReportScopeChip(
               label: 'Tümü',
-              selected: target == _ReportTarget.all,
-              onTap: () => onChanged(_ReportTarget.all),
+              selected: selectedDriverId == null,
+              onTap: () => onChanged(null),
             ),
-            const SizedBox(width: 8),
-            _ReportScopeChip(
-              label: VehicleId.vehicle1.label,
-              selected: target == _ReportTarget.vehicle1,
-              onTap: () => onChanged(_ReportTarget.vehicle1),
-            ),
-            const SizedBox(width: 8),
-            _ReportScopeChip(
-              label: VehicleId.vehicle2.label,
-              selected: target == _ReportTarget.vehicle2,
-              onTap: () => onChanged(_ReportTarget.vehicle2),
-            ),
-            const SizedBox(width: 8),
-            _ReportScopeChip(
-              label: VehicleId.vehicle3.label,
-              selected: target == _ReportTarget.vehicle3,
-              onTap: () => onChanged(_ReportTarget.vehicle3),
-            ),
-            const SizedBox(width: 8),
-            _ReportScopeChip(
-              label: VehicleId.vehicle4.label,
-              selected: target == _ReportTarget.vehicle4,
-              onTap: () => onChanged(_ReportTarget.vehicle4),
-            ),
-            const SizedBox(width: 8),
-            _ReportScopeChip(
-              label: VehicleId.vehicle5.label,
-              selected: target == _ReportTarget.vehicle5,
-              onTap: () => onChanged(_ReportTarget.vehicle5),
-            ),
+            for (final driver in drivers) ...[
+              const SizedBox(width: 8),
+              _ReportScopeChip(
+                label: driver.label,
+                selected: selectedDriverId == driver.id,
+                onTap: () => onChanged(driver.id),
+              ),
+            ],
           ],
         ),
       ),

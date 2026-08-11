@@ -112,7 +112,9 @@ class _CalendarPageState extends State<CalendarPage>
   late Animation<double> _weekFade;
   FleetState get _fleetState => context.read<FleetState>();
 
-  VehicleWorkspace get _currentWorkspace => _fleetState.activeWorkspace;
+  // Bu ekrana yalnızca HomePage'in sidebar'ından (sürücü listesi zaten
+  // yüklenmiş durumda) geçilir, bu yüzden non-null varsayılabilir.
+  VehicleWorkspace get _currentWorkspace => _fleetState.activeWorkspace!;
 
   Map<DateTime, Map<ShiftType, List<VisitPlanItem>>> get _planByDay =>
       _currentWorkspace.planByDay;
@@ -671,7 +673,7 @@ class _CalendarPageState extends State<CalendarPage>
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      _fleetState.activeVehicle.label,
+                      _currentWorkspace.driver.label,
                       style: const TextStyle(
                         color: _C.textDark,
                         fontWeight: FontWeight.w900,

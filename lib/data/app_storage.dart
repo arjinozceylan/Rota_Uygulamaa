@@ -33,7 +33,7 @@ class AppStorage {
 
   Future<void> saveAll({
     required List<String> addressCards,
-    required Map<VehicleId, VehicleWorkspace> fleet,
+    required Map<int, VehicleWorkspace> fleet,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     await Future.wait([
@@ -54,7 +54,7 @@ class AppStorage {
     await _saveRoutes(prefs);
   }
 
-  Future<void> saveFleet(Map<VehicleId, VehicleWorkspace> fleet) async {
+  Future<void> saveFleet(Map<int, VehicleWorkspace> fleet) async {
     final prefs = await SharedPreferences.getInstance();
     await _saveFleet(prefs, fleet);
   }
@@ -119,7 +119,7 @@ class AppStorage {
               'totalMin': r.totalMin,
               'totalKm': r.totalKm,
               'path': r.path,
-              'vehicleId': r.vehicleId?.index,
+              'driverId': r.driverId,
             })
         .toList();
 
@@ -127,14 +127,15 @@ class AppStorage {
     await prefs.setString(_keyRoutes, jsonEncode(records));
 
     // En son oluşturulan rotayı backend'e gönder (koordinatlı duraklarla).
-    // Panel artık girişsiz kullanılamadığı için (misafir modu kaldırıldı,
-    // bkz. router.dart _authGuard) user_id normalde her zaman dolu olur;
-    // yine de savunma amaçlı kontrol kalıyor — önceden buradaki "?? 1"
-    // düşüşü yüzünden bir açık, backend'deki gerçek hesap #1'in üzerine
-    // sessizce yazılmasına yol açmıştı.
-    final userId = prefs.getInt("user_id");
-    if (allRecords.isNotEmpty && userId != null) {
+    // Rota, oluşturulduğu sırada seçili olan SÜRÜCÜNÜN hesabına
+    // (driverId — gerçek backend user_id'si) kaydedilir; admin'in kendi
+    // hesabına değil. Mobil, kendi hesabının rotasını doğrudan
+    // /routes/{kendi user_id'si}/active üzerinden çekiyor — artık ayrı bir
+    // "araç" eşleşmesi yok, bu yüzden doğru driverId göndermek zorunlu.
+    if (allRecords.isNotEmpty) {
       final lastRoute = allRecords.first;
+      final driverId = lastRoute.driverId;
+      if (driverId == null) return;
 
       final stops = lastRoute.stops ?? const <Address>[];
       final stopsJson = stops
@@ -157,8 +158,7 @@ class AppStorage {
           Uri.parse("https://route-backend-1.onrender.com/routes"),
           headers: await AuthService.authHeaders(),
           body: jsonEncode({
-            "user_id": userId,
-            "vehicle_id": lastRoute.vehicleId?.index,
+            "user_id": driverId,
             "name": "Web Rota",
             "route_json": {
               "createdAt": lastRoute.createdAt.toIso8601String(),
@@ -166,7 +166,6 @@ class AppStorage {
               "totalKm": lastRoute.totalKm,
               "path": lastRoute.path,
               "stops": stopsJson,
-              "vehicleId": lastRoute.vehicleId?.index,
             },
           }),
         );
@@ -197,13 +196,12 @@ class AppStorage {
       final list = jsonDecode(raw) as List;
       return list.map((e) {
         final m = e as Map<String, dynamic>;
-        final vidx = m['vehicleId'] as int?;
         return RouteRecord(
           createdAt: DateTime.parse(m['createdAt'] as String),
           totalMin: m['totalMin'] as int,
           totalKm: (m['totalKm'] as num).toDouble(),
           path: List<String>.from(m['path'] as List),
-          vehicleId: vidx != null ? VehicleId.values[vidx] : null,
+          driverId: m['driverId'] as int?,
         );
       }).toList();
     } catch (_) {
@@ -253,12 +251,12 @@ class AppStorage {
 
   Future<void> _saveFleet(
     SharedPreferences prefs,
-    Map<VehicleId, VehicleWorkspace> fleet,
+    Map<int, VehicleWorkspace> fleet,
   ) async {
     final data = <String, dynamic>{};
     for (final entry in fleet.entries) {
       final ws = entry.value;
-      data[entry.key.index.toString()] = {
+      data[entry.key.toString()] = {
         'fixedHome': ws.fixedHomeAddress?.toJson(),
         'dropped': ws.dropped,
         'repeatByAddress': ws.repeatByAddress.map(
@@ -289,48 +287,49 @@ class AppStorage {
     await prefs.setString(_keyFleet, jsonEncode(data));
 
     // Backend'e gönderimi 3sn debounce ederek art arda gelen aksiyonları
-    // (adres ekle/sil vb.) tek istekte topla. Panel artık girişsiz
-    // kullanılamadığı için user_id normalde her zaman dolu olur; yine de
-    // savunma amaçlı kontrol kalıyor (bkz. yukarıdaki not).
-    final userId = prefs.getInt("user_id");
-    if (userId == null) return;
+    // (adres ekle/sil vb.) tek istekte topla. Her sürücünün workspace'i
+    // artık kendi gerçek user_id'siyle ayrı ayrı kaydediliyor — eskiden
+    // tek bir "filo" bloğu tüm araçları (0-4) içeren tek bir istekte
+    // gidiyordu; her sürücünün verisi artık gerçekten kendine özel.
     _fleetPushTimer?.cancel();
     _fleetPushTimer = Timer(const Duration(seconds: 3), () async {
-      try {
-        final response = await http.post(
-          Uri.parse("https://route-backend-1.onrender.com/fleet/$userId"),
-          headers: await AuthService.authHeaders(),
-          body: jsonEncode({"vehicles": data}),
-        );
+      for (final entry in data.entries) {
+        final driverId = entry.key;
+        try {
+          final response = await http.post(
+            Uri.parse("https://route-backend-1.onrender.com/fleet/$driverId"),
+            headers: await AuthService.authHeaders(),
+            body: jsonEncode({"workspace": entry.value}),
+          );
 
-        if (response.statusCode < 200 || response.statusCode >= 300) {
-          AuthService.flagIfSessionError(response.body);
-          debugPrint(
-            "Backend filo kaydetme hatası: ${response.statusCode} ${response.body}",
-          );
-          onSyncError?.call(
-            "Filo bilgisi sunucuya kaydedilemedi (${response.statusCode}).",
-          );
+          if (response.statusCode < 200 || response.statusCode >= 300) {
+            AuthService.flagIfSessionError(response.body);
+            debugPrint(
+              "Backend filo kaydetme hatası ($driverId): ${response.statusCode} ${response.body}",
+            );
+            onSyncError?.call(
+              "Filo bilgisi sunucuya kaydedilemedi (${response.statusCode}).",
+            );
+          }
+        } catch (e) {
+          // Backend'e gönderilemezse web uygulaması bozulmasın, ama kullanıcıyı bilgilendir
+          debugPrint("Backend filo kaydetme hatası ($driverId): $e");
+          onSyncError?.call("Filo bilgisi sunucuya kaydedilemedi.");
         }
-      } catch (e) {
-        // Backend'e gönderilemezse web uygulaması bozulmasın, ama kullanıcıyı bilgilendir
-        debugPrint("Backend filo kaydetme hatası: $e");
-        onSyncError?.call("Filo bilgisi sunucuya kaydedilemedi.");
       }
     });
   }
 
-  Map<VehicleId, VehicleWorkspace> _loadFleet(SharedPreferences prefs) {
-    final fleet = VehicleWorkspace.createInitialFleet();
+  Map<int, VehicleWorkspace> _loadFleet(SharedPreferences prefs) {
+    final fleet = <int, VehicleWorkspace>{};
     try {
       final raw = prefs.getString(_keyFleet);
       if (raw == null) return fleet;
       final data = jsonDecode(raw) as Map<String, dynamic>;
 
       for (final entry in data.entries) {
-        final idx = int.tryParse(entry.key);
-        if (idx == null || idx >= VehicleId.values.length) continue;
-        final vid = VehicleId.values[idx];
+        final driverId = int.tryParse(entry.key);
+        if (driverId == null) continue;
         final m = entry.value as Map<String, dynamic>;
 
         Address? fixedHome;
@@ -372,8 +371,11 @@ class AppStorage {
           );
         }
 
-        fleet[vid] = VehicleWorkspace(
-          id: vid,
+        // Kullanıcı adı burada bilinmiyor (yerel önbellek sadece id
+        // tutuyor) — geçici bir etiket kullanılır, FleetState.syncDrivers
+        // backend'den gelen gerçek sürücü listesiyle bunu hemen düzeltir.
+        fleet[driverId] = VehicleWorkspace(
+          driver: Driver(id: driverId, username: 'Sürücü $driverId'),
           fixedHomeAddress: fixedHome,
           dropped: dropped,
           repeatByAddress: repeatByAddress,
@@ -388,7 +390,7 @@ class AppStorage {
 
 class AppStorageData {
   final List<String> addressCards;
-  final Map<VehicleId, VehicleWorkspace> fleet;
+  final Map<int, VehicleWorkspace> fleet;
   final List<RouteRecord> routes;
   final List<UploadedFile> uploads;
 

@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 
 import '../core/models/address.dart';
 import '../models/calendar_event.dart';
-import '../models/vehicle_workspace.dart';
 import '../services/fleet_state.dart';
 import '../widgets/vehicle_selector_bar.dart';
 import 'calendar_page.dart';
@@ -113,7 +112,7 @@ class _CalendarMonthOverviewState extends State<CalendarMonthOverview> {
   @override
   Widget build(BuildContext context) {
     final fleet = context.watch<FleetState>();
-    final planByDay = fleet.activeWorkspace.planByDay;
+    final planByDay = fleet.activeWorkspace?.planByDay ?? const {};
     final now = DateTime.now();
 
     final daysInMonth = DateTime(_month.year, _month.month + 1, 0).day;
@@ -136,7 +135,7 @@ class _CalendarMonthOverviewState extends State<CalendarMonthOverview> {
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      fleet.activeVehicle.label,
+                      fleet.activeWorkspace?.driver.label ?? '—',
                       style: const TextStyle(
                         color: _C.textDark,
                         fontWeight: FontWeight.w900,
@@ -145,7 +144,7 @@ class _CalendarMonthOverviewState extends State<CalendarMonthOverview> {
                     ),
                     const SizedBox(height: 4),
                     const Text(
-                      'Aktif araç takvimi',
+                      'Aktif sürücü takvimi',
                       style: TextStyle(
                         color: _C.textLight,
                         fontWeight: FontWeight.w700,

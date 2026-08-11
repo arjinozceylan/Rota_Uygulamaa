@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../models/vehicle_workspace.dart';
 import '../services/fleet_state.dart';
 
-/// Uygulamanın üst kısmında gösterilecek araç seçim barı.
+/// Uygulamanın üst kısmında gösterilecek sürücü seçim barı.
 ///
 /// Aynı widget Home / Calendar / Reports sayfalarında tekrar kullanılabilir.
+/// Sürücü listesi backend'den dinamik gelir (sabit sayıda "araç" yoktur).
 class VehicleSelectorBar extends StatelessWidget {
   const VehicleSelectorBar({super.key, this.compact = false});
 
@@ -16,7 +16,26 @@ class VehicleSelectorBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fleet = context.watch<FleetState>();
-    final active = fleet.activeVehicle;
+    final drivers = fleet.drivers;
+    final active = fleet.activeDriverId;
+
+    if (drivers.isEmpty) {
+      return Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: compact ? 8 : 10,
+          vertical: compact ? 8 : 10,
+        ),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+        ),
+        child: const Text(
+          'Sürücüler yükleniyor...',
+          style: TextStyle(fontSize: 12.5, color: Color(0xFF5A6A85)),
+        ),
+      );
+    }
 
     return Container(
       padding: EdgeInsets.symmetric(
@@ -38,12 +57,12 @@ class VehicleSelectorBar extends StatelessWidget {
       child: Wrap(
         spacing: 8,
         runSpacing: 8,
-        children: VehicleId.values.map((id) {
-          final isActive = id == active;
-          return _VehicleChip(
-            label: id.label,
+        children: drivers.map((driver) {
+          final isActive = driver.id == active;
+          return _DriverChip(
+            label: driver.label,
             selected: isActive,
-            onTap: () => context.read<FleetState>().selectVehicle(id),
+            onTap: () => context.read<FleetState>().selectDriver(driver.id),
             compact: compact,
           );
         }).toList(),
@@ -52,8 +71,8 @@ class VehicleSelectorBar extends StatelessWidget {
   }
 }
 
-class _VehicleChip extends StatelessWidget {
-  const _VehicleChip({
+class _DriverChip extends StatelessWidget {
+  const _DriverChip({
     required this.label,
     required this.selected,
     required this.onTap,
@@ -92,7 +111,7 @@ class _VehicleChip extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
-                Icons.local_shipping_rounded,
+                Icons.person_rounded,
                 size: compact ? 15 : 16,
                 color: selected ? Colors.white : const Color(0xFF5A6A85),
               ),
