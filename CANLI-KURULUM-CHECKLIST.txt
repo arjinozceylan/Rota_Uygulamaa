@@ -1,0 +1,21 @@
+Rota360 CANLI KURULUM ONCESI KONTROL
+
+[ ] Rota_Uygulamaa main branch güncel.
+[ ] flutter analyze kabul edilebilir durumda.
+[ ] TOMTOM_API_KEY environment variable üzerinden build'e veriliyor.
+[ ] .claude/ GitHub'a gitmiyor.
+[ ] local_backend yalnızca 127.0.0.1:3100 dinliyor.
+[ ] local_backend/data/rota360.db installer'a dahil değil.
+[ ] node_modules Windows developer PC'de npm ci ile yeniden üretildi.
+[ ] Installer içindeki SQLite data klasörü yazılabilir LocalAppData altında.
+[ ] Installer/shortcut/splash içinde kurum adı yok; yalnızca Rota360 var.
+[ ] Render backend erişimi hastane ağından HTTPS/443 açık.
+[ ] Render ilk isteğinin cold-start nedeniyle gecikebileceği biliniyor.
+[ ] setupDrivers() kullanıcı adı/şifre reset riski kontrol edildi.
+[ ] Hastane PC'de installer kuruldu.
+[ ] Rota360 kısayoluna basınca local backend otomatik başladı.
+[ ] http://127.0.0.1:3100/health -> ok:true
+[ ] Kısa sahte CSV ile import test edildi.
+[ ] Uygulama kapanıp açıldı; local adresler geri geldi.
+[ ] Excel Yüklenenler geçmişi geri geldi.
+[ ] Gerçek hasta verisiyle test log/ekran görüntüsü paylaşılmadı.

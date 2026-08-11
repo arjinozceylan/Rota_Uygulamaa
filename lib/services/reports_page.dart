@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart';
 
 import '../core/models/address.dart';
 import '../models/vehicle_workspace.dart';
@@ -335,8 +336,16 @@ class _ReportsPageState extends State<ReportsPage>
               children: [
                 Row(
                   children: [
-                    // Geri butonu
-
+                    IconButton(
+                      onPressed: () => context.go('/'),
+                      tooltip: 'Rota Paneline Dön',
+                      icon: const Icon(
+                        Icons.arrow_back_rounded,
+                        color: _C.accent,
+                        size: 24,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
                     Container(
                       width: 40,
                       height: 40,
@@ -842,7 +851,8 @@ class _FrequencyTab extends StatelessWidget {
                 color: _C.surface,
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
-                  color: rank <= 3 ? rankColor.withValues(alpha: 0.25) : _C.stroke,
+                  color:
+                      rank <= 3 ? rankColor.withValues(alpha: 0.25) : _C.stroke,
                 ),
                 boxShadow: [
                   BoxShadow(

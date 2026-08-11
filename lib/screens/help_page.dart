@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 class HelpPage extends StatelessWidget {
   const HelpPage({super.key});
@@ -7,7 +8,13 @@ class HelpPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          onPressed: () => context.go('/'),
+          tooltip: 'Rota Paneline Dön',
+          icon: const Icon(Icons.arrow_back_rounded),
+        ),
         title: const Text("Nasıl Kullanılır?"),
+        automaticallyImplyLeading: false,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),

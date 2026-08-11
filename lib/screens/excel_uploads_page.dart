@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 
 class ExcelUploadsPage extends StatefulWidget {
@@ -94,12 +95,26 @@ class _ExcelUploadsPageState extends State<ExcelUploadsPage> {
             // ── Başlık ────────────────────────────────────────────────
             Row(
               children: [
+                IconButton(
+                  onPressed: () => context.go('/'),
+                  tooltip: 'Rota Paneline Dön',
+                  icon: const Icon(
+                    Icons.arrow_back_rounded,
+                    color: _accent,
+                    size: 24,
+                  ),
+                ),
+
+                const SizedBox(width: 4),
+
                 const Icon(
                   Icons.folder_copy_rounded,
                   color: _accent,
                   size: 22,
                 ),
+
                 const SizedBox(width: 10),
+
                 const Text(
                   'Excel Yüklenenler',
                   style: TextStyle(
@@ -108,6 +123,7 @@ class _ExcelUploadsPageState extends State<ExcelUploadsPage> {
                     fontWeight: FontWeight.w800,
                   ),
                 ),
+
                 const Spacer(),
 
                 // Yenile
@@ -403,9 +419,6 @@ class _LocalImport {
   ) {
     final rawDate = json['imported_at']?.toString() ?? '';
 
-    // SQLite:
-    // 2026-08-10 17:27:13
-    // formatını Dart'ın daha güvenli parse edebilmesi için T ekliyoruz.
     final normalizedDate =
         rawDate.contains(' ') ? rawDate.replaceFirst(' ', 'T') : rawDate;
 

@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../services/reports_page.dart';
 import '../services/auth_service.dart';
 
@@ -11,7 +14,11 @@ import '../services/auth_service.dart';
 class _StopView {
   final String address;
   final bool completed;
-  const _StopView({required this.address, required this.completed});
+
+  const _StopView({
+    required this.address,
+    required this.completed,
+  });
 }
 
 /// Tek bir rotanın görüntülenme modeli.
@@ -47,6 +54,7 @@ class _SavedRoutesPageState extends State<SavedRoutesPage> {
   static const _textLight = Color(0xFF6B7A8D);
 
   static const String _baseUrl = 'https://route-backend-1.onrender.com';
+
   bool _loading = true;
   String? _error;
   List<_RouteView> _routes = [];
@@ -55,7 +63,9 @@ class _SavedRoutesPageState extends State<SavedRoutesPage> {
   @override
   void initState() {
     super.initState();
+
     _load();
+
     // Kuryenin mobilde işaretlediği durak tamamlama durumu burada da
     // otomatik yansısın diye 10 saniyede bir sessizce yeniden çekiyoruz.
     _autoRefreshTimer = Timer.periodic(
@@ -76,6 +86,7 @@ class _SavedRoutesPageState extends State<SavedRoutesPage> {
 
   String _fmtDur(int min) {
     if (min < 60) return '$min dk';
+
     return '${min ~/ 60}s ${min % 60}dk';
   }
 
@@ -87,9 +98,15 @@ class _SavedRoutesPageState extends State<SavedRoutesPage> {
             createdAt: r.createdAt,
             totalKm: r.totalKm,
             totalMin: r.totalMin,
+
             // Yerel kayıtlarda tamamlanma bilgisi tutulmuyor.
             stops: r.path
-                .map((addr) => _StopView(address: addr, completed: false))
+                .map(
+                  (addr) => _StopView(
+                    address: addr,
+                    completed: false,
+                  ),
+                )
                 .toList(),
           ),
         )
@@ -98,30 +115,46 @@ class _SavedRoutesPageState extends State<SavedRoutesPage> {
 
   _RouteView _fromBackendJson(Map<String, dynamic> route) {
     final routeJson = route['route_json'] as Map<String, dynamic>? ?? {};
+
     final stopsRaw = routeJson['stops'] as List? ?? const [];
-    final sorted = stopsRaw.map((e) => e as Map<String, dynamic>).toList()
+
+    final sorted = stopsRaw
+        .map(
+          (e) => e as Map<String, dynamic>,
+        )
+        .toList()
       ..sort(
-        (a, b) =>
-            ((a['order'] ?? 0) as num).compareTo((b['order'] ?? 0) as num),
+        (a, b) => ((a['order'] ?? 0) as num).compareTo(
+          (b['order'] ?? 0) as num,
+        ),
       );
 
     final stops = sorted.map((s) {
       final addr = (s['address'] ?? s['street'] ?? '').toString();
+
       final completed = s['completed'] == true;
-      return _StopView(address: addr, completed: completed);
+
+      return _StopView(
+        address: addr,
+        completed: completed,
+      );
     }).toList();
 
     // İlk durak (order: 1), rotanın başlangıç noktası — sürücü zaten
-    // hastanede/başlangıçta olduğu için otomatik tamamlanmış sayılır,
-    // ayrıca elle işaretlenmesi gerekmez.
+    // hastanede/başlangıçta olduğu için otomatik tamamlanmış sayılır.
     if (stops.isNotEmpty) {
-      stops[0] = _StopView(address: stops[0].address, completed: true);
+      stops[0] = _StopView(
+        address: stops[0].address,
+        completed: true,
+      );
     }
 
     final createdAtRaw = route['created_at']?.toString();
+
     final createdAt = DateTime.tryParse(createdAtRaw ?? '') ?? DateTime.now();
 
     final totalKm = (routeJson['totalKm'] as num?)?.toDouble() ?? 0.0;
+
     final totalMin = (routeJson['totalMin'] as num?)?.toInt() ?? 0;
 
     return _RouteView(
@@ -133,7 +166,9 @@ class _SavedRoutesPageState extends State<SavedRoutesPage> {
     );
   }
 
-  Future<void> _load({bool silent = false}) async {
+  Future<void> _load({
+    bool silent = false,
+  }) async {
     if (!silent) {
       setState(() {
         _loading = true;
@@ -143,24 +178,38 @@ class _SavedRoutesPageState extends State<SavedRoutesPage> {
 
     try {
       final prefs = await SharedPreferences.getInstance();
+
       final userId = prefs.getInt('user_id');
 
       if (userId == null) {
-        // Misafir modu: backend'de kullanıcıya bağlı rota yok, cihazdakini göster.
+        // Misafir modu: backend'de kullanıcıya bağlı rota yok,
+        // cihazdakini göster.
         _routes = _fromLocalRecords();
       } else {
         final res = await http.get(
-          Uri.parse('$_baseUrl/routes/$userId'),
+          Uri.parse(
+            '$_baseUrl/routes/$userId',
+          ),
           headers: await AuthService.authHeaders(),
         );
+
         if (res.statusCode == 200) {
           final data = jsonDecode(res.body) as List;
+
           _routes = data
-              .map((r) => _fromBackendJson(r as Map<String, dynamic>))
+              .map(
+                (r) => _fromBackendJson(
+                  r as Map<String, dynamic>,
+                ),
+              )
               .toList();
         } else {
-          AuthService.flagIfSessionError(res.body);
+          AuthService.flagIfSessionError(
+            res.body,
+          );
+
           _error = 'Rotalar sunucudan alınamadı (kod ${res.statusCode}).';
+
           _routes = _fromLocalRecords();
         }
       }
@@ -170,10 +219,15 @@ class _SavedRoutesPageState extends State<SavedRoutesPage> {
       if (!silent) {
         _error =
             'Rotalar yüklenirken bir hata oluştu, cihazdaki kayıtlar gösteriliyor.';
+
         _routes = _fromLocalRecords();
       }
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) {
+        setState(
+          () => _loading = false,
+        );
+      }
     }
   }
 
@@ -186,11 +240,30 @@ class _SavedRoutesPageState extends State<SavedRoutesPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Başlık
+            // ── Başlık ───────────────────────────────────────────────
             Row(
               children: [
-                const Icon(Icons.route_rounded, color: _accent, size: 22),
+                // Geri → Rota Paneli
+                IconButton(
+                  onPressed: () => context.go('/'),
+                  tooltip: 'Rota Paneline Dön',
+                  icon: const Icon(
+                    Icons.arrow_back_rounded,
+                    color: _accent,
+                    size: 24,
+                  ),
+                ),
+
+                const SizedBox(width: 4),
+
+                const Icon(
+                  Icons.route_rounded,
+                  color: _accent,
+                  size: 22,
+                ),
+
                 const SizedBox(width: 10),
+
                 const Text(
                   'Oluşturulan Rotalar',
                   style: TextStyle(
@@ -199,7 +272,9 @@ class _SavedRoutesPageState extends State<SavedRoutesPage> {
                     fontWeight: FontWeight.w800,
                   ),
                 ),
+
                 const SizedBox(width: 10),
+
                 if (_loading)
                   const SizedBox(
                     width: 16,
@@ -209,19 +284,35 @@ class _SavedRoutesPageState extends State<SavedRoutesPage> {
                       color: _accent,
                     ),
                   ),
+
                 const Spacer(),
+
                 IconButton(
                   onPressed: _loading ? null : _load,
-                  icon: const Icon(Icons.refresh_rounded, color: _accent),
+                  icon: const Icon(
+                    Icons.refresh_rounded,
+                    color: _accent,
+                  ),
                   tooltip: 'Yenile',
                 ),
+
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
-                    color: _accent.withValues(alpha: 0.10),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: _accent.withValues(alpha: 0.25)),
+                    color: _accent.withValues(
+                      alpha: 0.10,
+                    ),
+                    borderRadius: BorderRadius.circular(
+                      20,
+                    ),
+                    border: Border.all(
+                      color: _accent.withValues(
+                        alpha: 0.25,
+                      ),
+                    ),
                   ),
                   child: Text(
                     '${_routes.length} rota',
@@ -237,14 +328,28 @@ class _SavedRoutesPageState extends State<SavedRoutesPage> {
 
             if (_error != null)
               Padding(
-                padding: const EdgeInsets.only(top: 10),
+                padding: const EdgeInsets.only(
+                  top: 10,
+                ),
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFFF3E0).withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+                    color: const Color(
+                      0xFFFFF3E0,
+                    ).withValues(
+                      alpha: 0.08,
+                    ),
+                    borderRadius: BorderRadius.circular(
+                      10,
+                    ),
+                    border: Border.all(
+                      color: Colors.orange.withValues(
+                        alpha: 0.3,
+                      ),
+                    ),
                   ),
                   child: Row(
                     children: [
@@ -253,7 +358,9 @@ class _SavedRoutesPageState extends State<SavedRoutesPage> {
                         size: 14,
                         color: Colors.orange,
                       ),
-                      const SizedBox(width: 6),
+                      const SizedBox(
+                        width: 6,
+                      ),
                       Expanded(
                         child: Text(
                           _error!,
@@ -271,21 +378,29 @@ class _SavedRoutesPageState extends State<SavedRoutesPage> {
 
             const SizedBox(height: 20),
 
-            // Liste
+            // ── Liste ────────────────────────────────────────────────
             Expanded(
               child: _loading && _routes.isEmpty
                   ? const Center(
-                      child: CircularProgressIndicator(color: _accent),
+                      child: CircularProgressIndicator(
+                        color: _accent,
+                      ),
                     )
                   : _routes.isEmpty
                       ? _buildEmpty()
                       : ListView.separated(
                           itemCount: _routes.length,
-                          separatorBuilder: (_, __) =>
-                              const SizedBox(height: 12),
-                          itemBuilder: (context, index) {
+                          separatorBuilder: (_, __) => const SizedBox(
+                            height: 12,
+                          ),
+                          itemBuilder: (
+                            context,
+                            index,
+                          ) {
                             final r = _routes[index];
+
                             final routeNo = index + 1;
+
                             return _RouteCard(
                               route: r,
                               routeNo: routeNo,
@@ -306,8 +421,13 @@ class _SavedRoutesPageState extends State<SavedRoutesPage> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.route_rounded,
-              size: 56, color: _textLight.withValues(alpha: 0.4)),
+          Icon(
+            Icons.route_rounded,
+            size: 56,
+            color: _textLight.withValues(
+              alpha: 0.4,
+            ),
+          ),
           const SizedBox(height: 16),
           const Text(
             'Henüz rota oluşturulmadı',
@@ -320,7 +440,10 @@ class _SavedRoutesPageState extends State<SavedRoutesPage> {
           const SizedBox(height: 8),
           const Text(
             'Rota Paneli\'nden rota oluşturun,\nburada otomatik görünür.',
-            style: TextStyle(color: Color(0xFF3D4D60), fontSize: 13),
+            style: TextStyle(
+              color: Color(0xFF3D4D60),
+              fontSize: 13,
+            ),
             textAlign: TextAlign.center,
           ),
         ],
@@ -359,36 +482,67 @@ class _RouteCardState extends State<_RouteCard> {
   static const _orange = Color(0xFFFFB74D);
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     final r = widget.route;
+
     final total = r.stops.length;
+
     final done = r.completedCount;
 
     return Container(
       decoration: BoxDecoration(
         color: _surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _stroke),
+        borderRadius: BorderRadius.circular(
+          16,
+        ),
+        border: Border.all(
+          color: _stroke,
+        ),
       ),
       child: Column(
         children: [
           // ── Başlık satırı ──────────────────────────────────────────
           InkWell(
-            onTap: () => setState(() => _expanded = !_expanded),
+            onTap: () => setState(
+              () => _expanded = !_expanded,
+            ),
             borderRadius: _expanded
-                ? const BorderRadius.vertical(top: Radius.circular(16))
-                : BorderRadius.circular(16),
+                ? const BorderRadius.vertical(
+                    top: Radius.circular(
+                      16,
+                    ),
+                  )
+                : BorderRadius.circular(
+                    16,
+                  ),
             child: Container(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(
+                16,
+              ),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: [Color(0xFF1A3A5C), Color(0xFF0D2137)],
+                  colors: [
+                    Color(
+                      0xFF1A3A5C,
+                    ),
+                    Color(
+                      0xFF0D2137,
+                    ),
+                  ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
                 borderRadius: _expanded
-                    ? const BorderRadius.vertical(top: Radius.circular(16))
-                    : BorderRadius.circular(16),
+                    ? const BorderRadius.vertical(
+                        top: Radius.circular(
+                          16,
+                        ),
+                      )
+                    : BorderRadius.circular(
+                        16,
+                      ),
               ),
               child: Row(
                 children: [
@@ -396,8 +550,12 @@ class _RouteCardState extends State<_RouteCard> {
                     width: 36,
                     height: 36,
                     decoration: BoxDecoration(
-                      color: _accent.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(10),
+                      color: _accent.withValues(
+                        alpha: 0.15,
+                      ),
+                      borderRadius: BorderRadius.circular(
+                        10,
+                      ),
                     ),
                     child: Center(
                       child: Text(
@@ -410,7 +568,9 @@ class _RouteCardState extends State<_RouteCard> {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(
+                    width: 12,
+                  ),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -423,11 +583,17 @@ class _RouteCardState extends State<_RouteCard> {
                             fontSize: 14,
                           ),
                         ),
-                        const SizedBox(height: 2),
+                        const SizedBox(
+                          height: 2,
+                        ),
                         Text(
-                          widget.fmtDate(r.createdAt),
+                          widget.fmtDate(
+                            r.createdAt,
+                          ),
                           style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.45),
+                            color: Colors.white.withValues(
+                              alpha: 0.45,
+                            ),
                             fontSize: 11.5,
                           ),
                         ),
@@ -435,29 +601,41 @@ class _RouteCardState extends State<_RouteCard> {
                     ),
                   ),
                   _StatChip(
-                    label: widget.fmtDur(r.totalMin),
+                    label: widget.fmtDur(
+                      r.totalMin,
+                    ),
                     icon: Icons.timer_rounded,
                     color: _accent,
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(
+                    width: 8,
+                  ),
                   _StatChip(
                     label: '${r.totalKm.toStringAsFixed(1)} km',
                     icon: Icons.route_rounded,
                     color: _green,
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(
+                    width: 8,
+                  ),
                   _StatChip(
                     label: '$done/$total tamamlandı',
                     icon: Icons.check_circle_outline_rounded,
                     color: done == total && total > 0 ? _green : _orange,
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(
+                    width: 12,
+                  ),
                   AnimatedRotation(
                     turns: _expanded ? 0.5 : 0,
-                    duration: const Duration(milliseconds: 200),
+                    duration: const Duration(
+                      milliseconds: 200,
+                    ),
                     child: Icon(
                       Icons.keyboard_arrow_down_rounded,
-                      color: Colors.white.withValues(alpha: 0.5),
+                      color: Colors.white.withValues(
+                        alpha: 0.5,
+                      ),
                       size: 20,
                     ),
                   ),
@@ -466,18 +644,25 @@ class _RouteCardState extends State<_RouteCard> {
             ),
           ),
 
-          // ── Detay (genişletince) ────────────────────────────────────
+          // ── Detay ──────────────────────────────────────────────────
           if (_expanded)
             Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(
+                16,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Row(
                     children: [
-                      Icon(Icons.alt_route_rounded,
-                          size: 14, color: _textLight),
-                      SizedBox(width: 6),
+                      Icon(
+                        Icons.alt_route_rounded,
+                        size: 14,
+                        color: _textLight,
+                      ),
+                      SizedBox(
+                        width: 6,
+                      ),
                       Text(
                         'Rota Sırası',
                         style: TextStyle(
@@ -489,127 +674,161 @@ class _RouteCardState extends State<_RouteCard> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  ...r.stops.asMap().entries.map((e) {
-                    final idx = e.key;
-                    final stop = e.value;
-                    final isFirst = idx == 0;
-                    final isLast = idx == r.stops.length - 1;
+                  const SizedBox(
+                    height: 12,
+                  ),
+                  ...r.stops.asMap().entries.map(
+                    (e) {
+                      final idx = e.key;
 
-                    Color dotColor = _textLight;
-                    IconData dotIcon = Icons.circle_outlined;
+                      final stop = e.value;
 
-                    if (stop.completed) {
-                      dotColor = _green;
-                      dotIcon = Icons.check_rounded;
-                    } else if (isFirst) {
-                      dotColor = _green;
-                      dotIcon = Icons.home_rounded;
-                    } else if (isLast) {
-                      dotColor = _accentNav;
-                      dotIcon = Icons.flag_rounded;
-                    }
+                      final isFirst = idx == 0;
 
-                    return Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SizedBox(
-                          width: 32,
-                          child: Column(
-                            children: [
-                              Container(
-                                width: 28,
-                                height: 28,
-                                decoration: BoxDecoration(
-                                  color: dotColor.withValues(alpha: 0.12),
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: dotColor.withValues(alpha: 0.4),
-                                  ),
-                                ),
-                                child: Icon(dotIcon, size: 14, color: dotColor),
-                              ),
-                              if (!isLast)
-                                Container(
-                                  width: 2,
-                                  height: 28,
-                                  color: _stroke,
-                                ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Padding(
-                            padding: EdgeInsets.only(bottom: isLast ? 0 : 16),
+                      final isLast = idx == r.stops.length - 1;
+
+                      Color dotColor = _textLight;
+
+                      IconData dotIcon = Icons.circle_outlined;
+
+                      if (stop.completed) {
+                        dotColor = _green;
+
+                        dotIcon = Icons.check_rounded;
+                      } else if (isFirst) {
+                        dotColor = _green;
+
+                        dotIcon = Icons.home_rounded;
+                      } else if (isLast) {
+                        dotColor = _accentNav;
+
+                        dotIcon = Icons.flag_rounded;
+                      }
+
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SizedBox(
+                            width: 32,
                             child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Row(
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 7,
-                                        vertical: 2,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: dotColor.withValues(alpha: 0.1),
-                                        borderRadius: BorderRadius.circular(6),
-                                      ),
-                                      child: Text(
-                                        isFirst
-                                            ? 'Başlangıç'
-                                            : isLast
-                                                ? 'Bitiş'
-                                                : 'Durak $idx',
-                                        style: TextStyle(
-                                          color: dotColor,
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w800,
-                                        ),
+                                Container(
+                                  width: 28,
+                                  height: 28,
+                                  decoration: BoxDecoration(
+                                    color: dotColor.withValues(
+                                      alpha: 0.12,
+                                    ),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: dotColor.withValues(
+                                        alpha: 0.4,
                                       ),
                                     ),
-                                    if (stop.completed) ...[
-                                      const SizedBox(width: 6),
+                                  ),
+                                  child: Icon(
+                                    dotIcon,
+                                    size: 14,
+                                    color: dotColor,
+                                  ),
+                                ),
+                                if (!isLast)
+                                  Container(
+                                    width: 2,
+                                    height: 28,
+                                    color: _stroke,
+                                  ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(
+                            width: 10,
+                          ),
+                          Expanded(
+                            child: Padding(
+                              padding: EdgeInsets.only(
+                                bottom: isLast ? 0 : 16,
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
                                       Container(
                                         padding: const EdgeInsets.symmetric(
                                           horizontal: 7,
                                           vertical: 2,
                                         ),
                                         decoration: BoxDecoration(
-                                          color: _green.withValues(alpha: 0.12),
-                                          borderRadius:
-                                              BorderRadius.circular(6),
+                                          color: dotColor.withValues(
+                                            alpha: 0.1,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            6,
+                                          ),
                                         ),
-                                        child: const Text(
-                                          'Tamamlandı',
+                                        child: Text(
+                                          isFirst
+                                              ? 'Başlangıç'
+                                              : isLast
+                                                  ? 'Bitiş'
+                                                  : 'Durak $idx',
                                           style: TextStyle(
-                                            color: _green,
+                                            color: dotColor,
                                             fontSize: 10,
                                             fontWeight: FontWeight.w800,
                                           ),
                                         ),
                                       ),
+                                      if (stop.completed) ...[
+                                        const SizedBox(
+                                          width: 6,
+                                        ),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 7,
+                                            vertical: 2,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: _green.withValues(
+                                              alpha: 0.12,
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              6,
+                                            ),
+                                          ),
+                                          child: const Text(
+                                            'Tamamlandı',
+                                            style: TextStyle(
+                                              color: _green,
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ],
-                                  ],
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  stop.address,
-                                  style: const TextStyle(
-                                    color: _textDark,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                    height: 1.4,
                                   ),
-                                ),
-                              ],
+                                  const SizedBox(
+                                    height: 4,
+                                  ),
+                                  Text(
+                                    stop.address,
+                                    style: const TextStyle(
+                                      color: _textDark,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      height: 1.4,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                      ],
-                    );
-                  }),
+                        ],
+                      );
+                    },
+                  ),
                 ],
               ),
             ),
@@ -631,18 +850,35 @@ class _StatChip extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+    BuildContext context,
+  ) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 8,
+        vertical: 4,
+      ),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withValues(alpha: 0.2)),
+        color: color.withValues(
+          alpha: 0.1,
+        ),
+        borderRadius: BorderRadius.circular(
+          8,
+        ),
+        border: Border.all(
+          color: color.withValues(
+            alpha: 0.2,
+          ),
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 11, color: color),
+          Icon(
+            icon,
+            size: 11,
+            color: color,
+          ),
           const SizedBox(width: 4),
           Text(
             label,
