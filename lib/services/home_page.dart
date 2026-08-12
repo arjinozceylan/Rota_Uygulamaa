@@ -396,6 +396,18 @@ class _HomePageState extends State<HomePage> {
   static const _tomtomMaxDelayMs = 4000;
 
   // ── Adres geocoding (CSV import için) ─────────────────────────────────────
+  // Hastane/sabit ev konumu ayarlanmışsa onu, yoksa Tekirdağ (Süleymanpaşa)
+  // merkezini kullanır. Tüm içe aktarılan adresler her zaman Tekirdağ
+  // civarında olduğu için ("100. Yıl Mahallesi" gibi Türkiye genelinde
+  // tekrarlanan mahalle isimleri şehir belirtilse bile başka bir ile
+  // eşleşebiliyordu — doğrulanmış gerçek bir vaka) bu ipucu her zaman
+  // gönderiliyor, sadece ev konumu ayarlıyken değil.
+  static const double _tekirdagBiasLat = 40.9833;
+  static const double _tekirdagBiasLon = 27.5167;
+
+  double get _geocodeBiasLat => fixedHomeAddress?.lat ?? _tekirdagBiasLat;
+  double get _geocodeBiasLon => fixedHomeAddress?.lng ?? _tekirdagBiasLon;
+
   Future<Address> _makeAndGeocodeManualAddress(String text) async {
     final t = text.trim();
     final code = 'M${(_manualCodeCounter++).toString().padLeft(3, '0')}';
@@ -407,6 +419,8 @@ class _HomePageState extends State<HomePage> {
         for (var attempt = 0; attempt < 6; attempt++) {
           final result = await _bulkGeocodeService.search(
             query: _sanitizeForGeocoding(t),
+            biasLat: _geocodeBiasLat,
+            biasLon: _geocodeBiasLon,
           );
           if (!result.wasRateLimited) {
             if (result.addresses.isNotEmpty) {
@@ -879,12 +893,23 @@ class _HomePageState extends State<HomePage> {
     // noktalı mahalle isimlerine dokunma (örn. "100. Yıl Mahallesi").
     var s = raw.replaceFirst(RegExp(r'^\s*\d+\s*-\s*'), '');
 
+    // Şehir/ilçe bilgisi her zaman virgülle ayrılmış SON parça (ör.
+    // "...Tekirdağ" ya da "...Süleymanpaşa/Tekirdağ") — bunu en sonda
+    // tekrar eklemek için burada saklıyoruz. Aşağıdaki anahtar-kelime
+    // filtresi ve "sokak adından sonrasını kırp" adımı bu bilgiyi
+    // kaybediyordu: "100. Yıl Mahallesi" gibi Türkiye genelinde onlarca
+    // şehirde tekrarlanan bir mahalle adı, şehir belirtilmeden TomTom'a
+    // gönderildiğinde tamamen başka bir ildeki (hatta bir okuldaki)
+    // "100. Yıl"a eşleşip yüzlerce km'lik sahte rotalara yol açıyordu.
+    final rawParts =
+        s.split(',').map((p) => p.trim()).where((p) => p.isNotEmpty).toList();
+    final cityPart = rawParts.isNotEmpty ? rawParts.last : '';
+
     final addressKeyword = RegExp(
       r'(MAH\.?|MH\.?|SOK\.?|SK\.?|CAD\.?|CD\.?|BULV|BLV|APT|SİTESİ|SITESI|NO\s*:)',
       caseSensitive: false,
     );
-    final parts =
-        s.split(',').map((p) => p.trim()).where((p) => p.isNotEmpty).toList();
+    final parts = rawParts;
     if (parts.length > 1) {
       final keep = parts.where((p) => addressKeyword.hasMatch(p)).toList();
       if (keep.isNotEmpty) s = keep.join(', ');
@@ -940,6 +965,15 @@ class _HomePageState extends State<HomePage> {
     ).allMatches(s).toList();
     if (streetMatches.isNotEmpty) {
       s = s.substring(0, streetMatches.first.end);
+    }
+
+    // Şehir/ilçe bilgisi yukarıdaki adımlardan herhangi biri tarafından
+    // düşürülmüş olabilir (kırpma, anahtar-kelime filtresi) — sorguda
+    // hâlâ geçmiyorsa en sona ekle. Bu, mahalle isminin tek başına
+    // (ör. "100. Yıl Mahallesi") başka bir şehirle karışmasını önler.
+    if (cityPart.isNotEmpty &&
+        !s.toLowerCase().contains(cityPart.toLowerCase())) {
+      s = s.isEmpty ? cityPart : '$s, $cityPart';
     }
 
     s = s.replaceAll(RegExp(r'\s+'), ' ').trim();

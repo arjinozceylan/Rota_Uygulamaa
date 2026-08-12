@@ -39,6 +39,15 @@ class TomTomGeocodingService {
     int limit = 1,
     String countryCode = 'TR',
     String language = 'tr-TR',
+    // Sabit ev/hastane konumuna yakınlık ipucu. "100. Yıl Mahallesi" gibi
+    // Türkiye genelinde onlarca ilçede tekrarlanan mahalle isimleri,
+    // konum ipucu verilmezse TomTom tarafından tamamen başka bir şehre
+    // (hatta bir okula) eşleştirilebiliyor — doğrulanmış gerçek bir vaka:
+    // bias olmadan yanlış şehirdeki sonuç, doğru şehirdekinden daha
+    // yüksek skor alıyordu. Sağlandığında sonuçlar bu noktaya yakın
+    // olanlara doğru ağırlıklandırılır (sert bir sınır değil).
+    double? biasLat,
+    double? biasLon,
   }) async {
     final q = query.trim();
     if (q.isEmpty || !isConfigured) {
@@ -60,6 +69,8 @@ class TomTomGeocodingService {
         'limit': limit.toString(),
         'countrySet': countryCode,
         'language': language,
+        if (biasLat != null) 'lat': biasLat.toString(),
+        if (biasLon != null) 'lon': biasLon.toString(),
       },
     );
 
