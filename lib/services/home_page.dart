@@ -713,15 +713,18 @@ class _HomePageState extends State<HomePage> {
   // fırtınasına ve her adreste "Rota sunucuya kaydedilemedi" uyarısına yol
   // açıyordu. Diğer (tekil) ekleme akışları varsayılan true ile eskisi
   // gibi her ekleme sonrası tam senkronize olmaya devam eder.
-  void _addAddressToPoolAndCards(
+  // Adres AddressStore'a gerçekten yeni eklendiyse true, zaten var olduğu
+  // için atlandıysa false döner (bkz. AddressStore.add).
+  bool _addAddressToPoolAndCards(
     Address addressObj, {
     bool prepend = true,
     bool persist = true,
   }) {
     final a = addressObj.address.trim();
-    if (a.isEmpty) return;
+    if (a.isEmpty) return false;
+    var wasNew = false;
     setState(() {
-      AddressStore.add(addressObj);
+      wasNew = AddressStore.add(addressObj);
       if (!addressCards.contains(a)) {
         if (prepend) {
           addressCards.insert(0, a);
@@ -735,6 +738,7 @@ class _HomePageState extends State<HomePage> {
     } else {
       AppStorage.instance.saveAddresses(addressCards);
     }
+    return wasNew;
   }
 
   Future<void> _openMapPicker() async {
@@ -1466,6 +1470,7 @@ class _HomePageState extends State<HomePage> {
       const nominatimDelay = Duration(milliseconds: 100);
 
       int added = 0;
+      int newlyAdded = 0;
       int cacheHits = 0;
       int geocodedCount = 0;
       int noCoordCount = 0;
@@ -1549,11 +1554,12 @@ class _HomePageState extends State<HomePage> {
           }
 
           if (mounted) {
-            _addAddressToPoolAndCards(
+            final wasNew = _addAddressToPoolAndCards(
               geocodedAddress,
               prepend: false,
               persist: false,
             );
+            if (wasNew) newlyAdded++;
             added++;
           }
         } catch (e) {
@@ -1634,19 +1640,25 @@ class _HomePageState extends State<HomePage> {
         if (!mounted) return;
       }
 
+      final alreadyExisted = added - newlyAdded;
+      final newAddedSummary = alreadyExisted > 0
+          ? '$newlyAdded yeni eklendi, $alreadyExisted zaten adres '
+              'havuzundaydı'
+          : '$newlyAdded yeni adres eklendi';
+
       final String message;
       if (noCoordCount > 0) {
-        message = '⚠️ $added adres eklendi ama $noCoordCount tanesi için '
+        message = '⚠️ $newAddedSummary ama $noCoordCount tanesi için '
             'konum bulunamadı — bu adresler rotaya eklenemeyecek. '
             'Adres havuzunda ilgili adresleri kontrol edip haritadan '
             'elle konum seçin.';
       } else if (added == addressesToProcess.length) {
-        message = '✅ $added adres başarıyla işlendi. '
+        message = '✅ $newAddedSummary. '
             '$cacheHits adres lokal cache\'den alındı, '
             '$geocodedCount adres geocode edildi.';
       } else {
-        message = '⚠️ $added / ${addressesToProcess.length} adres işlendi. '
-            '$cacheHits cache, $geocodedCount geocode.';
+        message = '⚠️ $added / ${addressesToProcess.length} adres işlendi '
+            '($newAddedSummary). $cacheHits cache, $geocodedCount geocode.';
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
