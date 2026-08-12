@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/calendar_event.dart';
 import '../data/address_store.dart';
+import '../data/app_storage.dart';
 import '../core/models/address.dart';
 import '../services/osrm_route_service.dart';
 import '../services/tsp_optimizer_service.dart';
@@ -111,6 +112,15 @@ class _CalendarPageState extends State<CalendarPage>
   late AnimationController _weekCtrl;
   late Animation<double> _weekFade;
   FleetState get _fleetState => context.read<FleetState>();
+
+  // Bu ekranda planByDay/forcedFirstStopByDay değiştiren hiçbir işlem
+  // kaydedilmiyordu — sadece _fleetState.markDirty() ile UI güncelleniyor,
+  // AppStorage'a hiç yazılmıyordu. Sonuç: sekme kapatılıp uygulama yeniden
+  // başlatılınca (ya da .exe kapanınca) takvime eklenen her şey sessizce
+  // kayboluyordu. Artık her mutasyondan sonra bu da çağrılıyor.
+  Future<void> _persist() async {
+    await AppStorage.instance.saveFleet(context.read<FleetState>().fleetView);
+  }
 
   // Bu ekrana yalnızca HomePage'in sidebar'ından (sürücü listesi zaten
   // yüklenmiş durumda) geçilir, bu yüzden non-null varsayılabilir.
@@ -286,6 +296,7 @@ class _CalendarPageState extends State<CalendarPage>
       // kalıyordu.
       _optimizeShiftForDay(dayKey, shift);
       _fleetState.markDirty();
+    _persist();
     } else if (previousForced == movedTitle) {
       // Önceden zorunlu ilk durak olan adres artık ilk sırada değilse constraint'i kaldır.
       _setForcedFirstTitle(dayKey, shift, null);
@@ -295,6 +306,7 @@ class _CalendarPageState extends State<CalendarPage>
 
       _optimizeShiftForDay(dayKey, shift);
       _fleetState.markDirty();
+    _persist();
     }
   }
 
@@ -324,6 +336,7 @@ class _CalendarPageState extends State<CalendarPage>
     _optimizeShiftForDay(fromKey, fromShift);
     _optimizeShiftForDay(toKey, targetShift);
     _fleetState.markDirty();
+    _persist();
   }
 
   // ── Dialogs ───────────────────────────────────────────────────────────────
@@ -368,6 +381,7 @@ class _CalendarPageState extends State<CalendarPage>
     // Yeni adres eklendikten sonra o vardiyayı otomatik optimize et.
     await _optimizeShiftForDay(dayKey, shift);
     _fleetState.markDirty();
+    _persist();
   }
 
   Future<void> _editItem(DateTime dayKey, ShiftType shift, int index) async {
@@ -381,6 +395,7 @@ class _CalendarPageState extends State<CalendarPage>
       _addWithRepeat(baseDay: dayKey, item: updated, shift: shift);
     });
     _fleetState.markDirty();
+    _persist();
     // Bu diyalogda sadece not/tekrar değişiyor — adres hiç değişmiyor ve
     // rota hiç yeniden hesaplanmıyor. Önceden burada "Adres güncellendi,
     // rota yeniden hesaplanıyor..." gösteriliyordu; bu hem yanlıştı hem de
@@ -632,6 +647,11 @@ class _CalendarPageState extends State<CalendarPage>
           ..clear()
           ..addAll(reordered);
       });
+      // Bu fonksiyon çağıran yerlerin bazılarında await edilmeden
+      // (fire-and-forget) tetikleniyor — dışarıdaki _persist() bu durumda
+      // optimize bitmeden çalışabilir. Nihai sıralamanın kaybolmaması için
+      // burada da ayrıca kaydediliyor.
+      _persist();
     } catch (e) {
       _toast('Optimizasyon hatası: $e');
     }
