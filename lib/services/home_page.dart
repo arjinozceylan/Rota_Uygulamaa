@@ -1067,9 +1067,24 @@ class _HomePageState extends State<HomePage> {
       // Adres sütununu başlığa göre bul. TC No, hasta adı-soyadı, irtibat,
       // başvuru/ziyaret tarihi, uygunluk durumu gibi hassas sütunlar hiç
       // okunmaz — yalnızca adres (ve varsa ilk sütundaki sıra no) işlenir.
-      var addressColIndex = headerCols.indexWhere(
-        (c) => c.toLowerCase() == 'adres',
+      //
+      // Önce tam eşleşme ("Adres", boşluklu/büyük-küçük farketmeksizin)
+      // denenir. Bulunamazsa "Hasta Adresi" gibi başlıkları da yakalamak
+      // için "adres" geçen ama "kod"/"tip" gibi farklı bir alanı işaret
+      // eden başlıkları (ör. "Adres Kodu") hariç tutan gevşek bir arama
+      // yapılır. İkisi de başarısız olursa eski davranışa (ilk sütun)
+      // düşülür — ama bu durumda aşağıdaki sayısal-değer kontrolü, o
+      // sütun gerçekten adres değilse (ör. hasta kodu) bunu yakalar.
+      final normalizedHeaders =
+          headerCols.map((c) => c.trim().toLowerCase()).toList();
+      var addressColIndex = normalizedHeaders.indexWhere(
+        (c) => c == 'adres' || c == 'adresi',
       );
+      if (addressColIndex == -1) {
+        addressColIndex = normalizedHeaders.indexWhere(
+          (c) => c.contains('adres') && !c.contains('kod') && !c.contains('tip'),
+        );
+      }
       int? sequenceColIndex;
       if (addressColIndex == -1) {
         addressColIndex = 0; // başlıkta "Adres" yoksa eski davranış: ilk sütun
@@ -1080,6 +1095,14 @@ class _HomePageState extends State<HomePage> {
       // Adres + sıra no'yu satır sırasıyla topla — bu sıra asla değiştirilmez.
       final addressesToProcess = <String>[];
       final sequencesToProcess = <String?>[];
+      // Sütun tespiti yanlışsa (ör. "Adres" başlığı bulunamayıp yanlışlıkla
+      // hasta kodu sütunu okunduysa), o sütundaki değerler sadece rakamdan
+      // oluşur — gerçek bir adreste mutlaka harf de bulunur. Böyle satırları
+      // geocoding'e hiç göndermeden ayıklayıp kullanıcıyı uyarıyoruz;
+      // aksi halde "8248" gibi bir hasta kodu sessizce "koordinat
+      // bulunamadı" hatasına yol açıyordu.
+      final numericOnly = RegExp(r'^\d+[\s.\-]*$');
+      var skippedNumericCount = 0;
       for (final cols in rows.skip(1)) {
         if (cols.every((c) => c.trim().isEmpty)) continue;
         String addressText;
@@ -1094,6 +1117,10 @@ class _HomePageState extends State<HomePage> {
         }
         addressText = _stripCsvQuotes(addressText);
         if (addressText.isEmpty) continue;
+        if (numericOnly.hasMatch(addressText)) {
+          skippedNumericCount++;
+          continue;
+        }
         addressesToProcess.add(addressText);
         if (sequenceColIndex != null && sequenceColIndex < cols.length) {
           final seq = _stripCsvQuotes(cols[sequenceColIndex]);
@@ -1104,12 +1131,29 @@ class _HomePageState extends State<HomePage> {
       }
 
       if (addressesToProcess.isEmpty) {
+        final msg = skippedNumericCount > 0
+            ? 'Adres sütunu bulunamadı — okunan sütun sadece rakamdan '
+                'oluşan değerler içeriyordu (hasta kodu sütunu olabilir). '
+                'Dosyadaki adres sütununun başlığının "Adres" olduğundan '
+                'emin olun.'
+            : 'Dosyada işlenecek adres bulunamadı';
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Dosyada işlenecek adres bulunamadı'),
-          ),
+          SnackBar(content: Text(msg), duration: const Duration(seconds: 6)),
         );
         return;
+      }
+
+      if (skippedNumericCount > 0 && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '$skippedNumericCount satır atlandı — adres sütunu sadece '
+              'rakam içeriyordu (muhtemelen hasta kodu), gerçek adres '
+              'sanılmadı.',
+            ),
+            duration: const Duration(seconds: 6),
+          ),
+        );
       }
 
       final cacheResponse = await http.post(
