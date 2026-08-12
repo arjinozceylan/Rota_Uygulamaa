@@ -23,6 +23,7 @@ import 'fleet_state.dart';
 import '../screens/map_picker_page.dart';
 import '../screens/osm_places_service.dart';
 import 'tomtom_geocoding_service.dart';
+import 'daily_route_sync_service.dart';
 import 'reports_page.dart';
 import '../widgets/vehicle_selector_bar.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -181,7 +182,20 @@ class _HomePageState extends State<HomePage> {
               ),
             )
             .toList();
-        context.read<FleetState>().syncDrivers(drivers);
+        final fleet = context.read<FleetState>();
+        fleet.syncDrivers(drivers);
+        // Panel her açıldığında tüm sürücülerin "bugün" için takvim planı
+        // varsa aktif rotalarını otomatik günceller — böylece takvime
+        // önceden (ör. günler öncesinden) girilen bir plan, o gün geldiğinde
+        // paneli sadece açmak bile yeterli olur, elle "Rota Oluştur"a
+        // basmaya gerek kalmaz.
+        for (final driver in drivers) {
+          final workspace = fleet.workspaceOf(driver.id);
+          if (workspace == null) continue;
+          unawaited(
+            syncTodayRouteForDriver(driverId: driver.id, workspace: workspace),
+          );
+        }
       } else {
         AuthService.flagIfSessionError(response.body);
       }

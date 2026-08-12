@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/calendar_event.dart';
@@ -6,6 +7,7 @@ import '../data/app_storage.dart';
 import '../core/models/address.dart';
 import '../services/osrm_route_service.dart';
 import '../services/tsp_optimizer_service.dart';
+import '../services/daily_route_sync_service.dart';
 import '../models/vehicle_workspace.dart';
 import '../services/fleet_state.dart';
 import '../widgets/vehicle_selector_bar.dart';
@@ -120,6 +122,18 @@ class _CalendarPageState extends State<CalendarPage>
   // kayboluyordu. Artık her mutasyondan sonra bu da çağrılıyor.
   Future<void> _persist() async {
     await AppStorage.instance.saveFleet(context.read<FleetState>().fleetView);
+    // Bugünün planı değiştiyse, sürücünün aktif rotasını da otomatik
+    // güncelle — önceden bu sadece ana panelden elle "Rota Oluştur" ile
+    // yapılıyordu, takvim planı ile sürücünün telefonda gördüğü rota
+    // birbirinden tamamen kopuktu.
+    final driverId = _currentWorkspace.driverId;
+    unawaited(
+      syncTodayRouteForDriver(
+        driverId: driverId,
+        workspace: _currentWorkspace,
+        osrm: _osrm,
+      ),
+    );
   }
 
   // Bu ekrana yalnızca HomePage'in sidebar'ından (sürücü listesi zaten
