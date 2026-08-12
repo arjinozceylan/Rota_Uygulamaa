@@ -161,10 +161,20 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // build(), bu iki bayrağa göre üç ayrı ekrandan birini seçer: henüz hiç
+  // deneme yapılmadıysa yükleniyor, denendi ve hata olduysa tekrar-dene,
+  // denendi ve hata yoksa ama liste boşsa "sürücü oluştur" ekranı. Eskiden
+  // tek koşul (fleet.drivers.isEmpty) vardı — bu da "henüz yüklenmedi" ile
+  // "gerçekten sıfır sürücü var" durumlarını ayırt edemiyor, ikincisinde
+  // ekran sonsuza kadar "yükleniyor" gösteriyordu.
+  bool _driversLoadAttempted = false;
+  bool _driversLoadError = false;
+
   // Backend'deki güncel sürücü hesap listesini çeker ve FleetState'i onunla
   // senkronize eder. Eskiden sabit 5 "araç" vardı; artık sekmeler doğrudan
   // gerçek sürücü hesaplarını (sürücü1..sürücüN) yansıtıyor.
   Future<void> _loadDriversAndSync() async {
+    var hadError = false;
     try {
       final response = await http.get(
         Uri.parse('${AuthService.baseUrl}/users/drivers'),
@@ -198,11 +208,114 @@ class _HomePageState extends State<HomePage> {
         }
       } else {
         AuthService.flagIfSessionError(response.body);
+        hadError = true;
       }
     } catch (_) {
-      // Sessizce geç — ekranda "Sürücüler yükleniyor..." görünmeye devam
-      // eder, sayfa yeniden açıldığında tekrar denenir.
+      hadError = true;
     }
+    if (!mounted) return;
+    setState(() {
+      _driversLoadAttempted = true;
+      _driversLoadError = hadError;
+    });
+  }
+
+  Future<void> _createDriver(String username, String password) async {
+    final response = await http.post(
+      Uri.parse('${AuthService.baseUrl}/register'),
+      headers: await AuthService.authHeaders(),
+      body: jsonEncode({
+        'username': username,
+        'password': password,
+        'role': 'driver',
+      }),
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      AuthService.flagIfSessionError(response.body);
+      throw Exception('Sürücü oluşturulamadı (${response.statusCode})');
+    }
+    await _loadDriversAndSync();
+  }
+
+  Future<void> _showCreateDriverDialog() async {
+    final usernameCtrl = TextEditingController();
+    final passwordCtrl = TextEditingController();
+    var submitting = false;
+    String? error;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('Yeni Sürücü Ekle'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: usernameCtrl,
+                autofocus: true,
+                decoration: const InputDecoration(labelText: 'Kullanıcı adı'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: passwordCtrl,
+                obscureText: true,
+                decoration: const InputDecoration(labelText: 'Şifre'),
+              ),
+              if (error != null) ...[
+                const SizedBox(height: 12),
+                Text(error!, style: const TextStyle(color: _T.accentRed)),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: submitting
+                  ? null
+                  : () => Navigator.of(dialogContext).pop(),
+              child: const Text('Vazgeç'),
+            ),
+            FilledButton(
+              onPressed: submitting
+                  ? null
+                  : () async {
+                      final username = usernameCtrl.text.trim();
+                      final password = passwordCtrl.text;
+                      if (username.isEmpty || password.length < 6) {
+                        setDialogState(() {
+                          error = 'Kullanıcı adı gerekli, şifre en az '
+                              '6 karakter olmalı.';
+                        });
+                        return;
+                      }
+                      setDialogState(() {
+                        submitting = true;
+                        error = null;
+                      });
+                      try {
+                        await _createDriver(username, password);
+                        if (dialogContext.mounted) {
+                          Navigator.of(dialogContext).pop();
+                        }
+                      } catch (e) {
+                        setDialogState(() {
+                          submitting = false;
+                          error = '$e';
+                        });
+                      }
+                    },
+              child: submitting
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Oluştur'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -592,7 +705,19 @@ class _HomePageState extends State<HomePage> {
         false;
   }
 
-  void _addAddressToPoolAndCards(Address addressObj, {bool prepend = true}) {
+  // [persist] false ise sadece adres havuzu lokal olarak kaydedilir, rota/
+  // filo backend senkronizasyonu (bkz. _persist -> saveAll -> _saveRoutes)
+  // ATLANIR. Toplu Excel içe aktarımda bu fonksiyon binlerce kez art arda
+  // çağrılıyor — her seferinde tam senkronizasyon, aynı son rotayı
+  // saniyede onlarca kez backend'e tekrar POST edip 429 (Too Many Requests)
+  // fırtınasına ve her adreste "Rota sunucuya kaydedilemedi" uyarısına yol
+  // açıyordu. Diğer (tekil) ekleme akışları varsayılan true ile eskisi
+  // gibi her ekleme sonrası tam senkronize olmaya devam eder.
+  void _addAddressToPoolAndCards(
+    Address addressObj, {
+    bool prepend = true,
+    bool persist = true,
+  }) {
     final a = addressObj.address.trim();
     if (a.isEmpty) return;
     setState(() {
@@ -605,7 +730,11 @@ class _HomePageState extends State<HomePage> {
         }
       }
     });
-    _persist();
+    if (persist) {
+      _persist();
+    } else {
+      AppStorage.instance.saveAddresses(addressCards);
+    }
   }
 
   Future<void> _openMapPicker() async {
@@ -919,8 +1048,17 @@ class _HomePageState extends State<HomePage> {
         s.split(',').map((p) => p.trim()).where((p) => p.isNotEmpty).toList();
     final cityPart = rawParts.isNotEmpty ? rawParts.last : '';
 
+    // "APT" tek başına "Apartmanı" ile eşleşmiyordu (harf sırası A-P-A-R-T,
+    // "APT" A-P-T arıyor) — apartman bilgisi olan segmentler sessizce
+    // düşüyordu, "APARTMAN" eklendi. NOT: "KÖY" bilinçli olarak eklenmedi —
+    // gerçek TomTom testinde (bkz. "Kaşıkçı Köyü" örneği) hiçbir anahtar
+    // kelime eşleşmeyince devreye giren "mesajın tamamını gönder" fallback'i
+    // (aşağıda keep.isEmpty kontrolü) köy adreslerinde daha fazla bağlam
+    // sağladığı için "KÖY" filtresinden daha yüksek güvenle doğru sonuç
+    // buluyordu (0.855 vs 0.646) — buraya eklemek gerilemeye yol açardı.
     final addressKeyword = RegExp(
-      r'(MAH\.?|MH\.?|SOK\.?|SK\.?|CAD\.?|CD\.?|BULV|BLV|APT|SİTESİ|SITESI|NO\s*:)',
+      r'(MAH\.?|MH\.?|SOK\.?|SK\.?|CAD\.?|CD\.?|BULV|BLV|'
+      r'APT\.?|APARTMAN|SİTESİ|SITESI|NO\s*:)',
       caseSensitive: false,
     );
     final parts = rawParts;
@@ -973,6 +1111,12 @@ class _HomePageState extends State<HomePage> {
 
     // Sokak/Cadde/Bulvar adından sonra gelen apartman/kat/daire/site bilgisi
     // Nominatim'in eşleşmesini engelliyor; sokak adına kadar kırp.
+    // NOT: "X Caddesi, Y Sokak" kalıbında son eşleşmeye (Sokak) kadar kırpmak
+    // denendi ama gerçek TomTom testinde daha kötü sonuç verdi — küçük/az
+    // kayıtlı sokak adları TomTom'da alakasız bir sokakla fuzzy-eşleşip
+    // güveni düşürüyor (ör. "Arzak Reisi Sokak" tek başına sorgulansa bile
+    // "Oruç Reis Sokak"a eşleşiyor, güven 0.64). İyi bilinen Cadde adında
+    // kırpan ilk-eşleşme (first) daha güvenilir kaldığı için korunuyor.
     final streetMatches = RegExp(
       r'(Sokak|Caddesi|Bulvarı)\b',
       caseSensitive: false,
@@ -1043,6 +1187,7 @@ class _HomePageState extends State<HomePage> {
   // ── CSV / Excel import ──────────────────────────────────────────────────
   Future<void> _importAddressesFromExcel() async {
     BuildContext? progressDialogContext;
+    ValueNotifier<int>? importProgress;
     try {
       final isMacDesktop = !kIsWeb && Platform.isMacOS;
       final result = await FilePicker.platform.pickFiles(
@@ -1272,7 +1417,11 @@ class _HomePageState extends State<HomePage> {
       // kullanmadan once kontrol et.
       if (!mounted) return;
 
-      // Progress dialog göster
+      // Progress dialog göster — importProgress her adres işlendikçe
+      // (aşağıdaki döngüde) güncellenir, ValueListenableBuilder da sadece
+      // bu küçük widget'ı yeniden çizer (tüm sayfayı değil).
+      importProgress = ValueNotifier<int>(0);
+      final importTotal = addressesToProcess.length;
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -1280,19 +1429,26 @@ class _HomePageState extends State<HomePage> {
           progressDialogContext = dialogContext;
           return AlertDialog(
             content: SizedBox(
-              height: 80,
-              child: Column(
-                children: [
-                  const CircularProgressIndicator(),
-                  const SizedBox(height: 16),
-                  Expanded(
-                    child: Text(
-                      'Adresler haritanın üzerinde konumlandırılıyor...\n(${addressesToProcess.length} adres)',
-                      style: const TextStyle(fontSize: 13),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ],
+              height: 96,
+              child: ValueListenableBuilder<int>(
+                valueListenable: importProgress!,
+                builder: (context, done, _) {
+                  final fraction = importTotal == 0 ? 0.0 : done / importTotal;
+                  final percent = (fraction * 100).round();
+                  return Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      LinearProgressIndicator(value: fraction),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Adresler haritanın üzerinde konumlandırılıyor...\n'
+                        '$done / $importTotal adres (%$percent)',
+                        style: const TextStyle(fontSize: 13),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
           );
@@ -1312,6 +1468,7 @@ class _HomePageState extends State<HomePage> {
       int added = 0;
       int cacheHits = 0;
       int geocodedCount = 0;
+      int noCoordCount = 0;
 
       final localPatients = <Map<String, dynamic>>[];
 
@@ -1368,6 +1525,14 @@ class _HomePageState extends State<HomePage> {
             }
           }
 
+          // Geocoding hem cache'den hem canlı istekten null dönebilir —
+          // önceden bu durum "added" sayacına başarılıymış gibi karışıyor,
+          // kullanıcı ancak rota oluştururken (çok sonra, hangi adres
+          // olduğunu anlamadan) "koordinat yok" hatasıyla karşılaşıyordu.
+          if (geocodedAddress.lat == null || geocodedAddress.lng == null) {
+            noCoordCount++;
+          }
+
           // Lokal SQLite'a aktarılacak kayıt
           localPatients.add({
             'externalCode': seq,
@@ -1387,12 +1552,15 @@ class _HomePageState extends State<HomePage> {
             _addAddressToPoolAndCards(
               geocodedAddress,
               prepend: false,
+              persist: false,
             );
             added++;
           }
         } catch (e) {
           // Tek bir adres hata verirse diğer adreslere devam et.
         }
+
+        importProgress.value = i + 1;
 
         // Sadece gerçek geocoding çağrıları arasında beklemek gerekiyor.
         // Cache'den okunan adresler için gereksiz bekleme yapmıyoruz.
@@ -1427,6 +1595,7 @@ class _HomePageState extends State<HomePage> {
             );
           }
         } catch (e) {
+          importProgress.dispose();
           if (progressDialogContext != null && progressDialogContext!.mounted) {
             Navigator.of(progressDialogContext!).pop();
             progressDialogContext = null;
@@ -1448,6 +1617,7 @@ class _HomePageState extends State<HomePage> {
       }
 
       if (!mounted) return;
+      importProgress.dispose();
       if (progressDialogContext != null && progressDialogContext!.mounted) {
         Navigator.of(progressDialogContext!).pop();
         progressDialogContext = null;
@@ -1457,20 +1627,37 @@ class _HomePageState extends State<HomePage> {
         UploadedFilesStore.add(pickedFile.name, added);
         await AppStorage.instance.saveUploads();
         if (!mounted) return;
+        // Döngü boyunca sadece adres havuzu kaydedildi (persist: false) —
+        // rota/filo backend senkronizasyonu burada, import bitince, tek
+        // seferlik yapılır.
+        await _persist();
+        if (!mounted) return;
       }
 
-      final message = added == addressesToProcess.length
-          ? '✅ $added adres başarıyla işlendi. '
-              '$cacheHits adres lokal cache\'den alındı, '
-              '$geocodedCount adres geocode edildi.'
-          : '⚠️ $added / ${addressesToProcess.length} adres işlendi. '
-              '$cacheHits cache, $geocodedCount geocode.';
+      final String message;
+      if (noCoordCount > 0) {
+        message = '⚠️ $added adres eklendi ama $noCoordCount tanesi için '
+            'konum bulunamadı — bu adresler rotaya eklenemeyecek. '
+            'Adres havuzunda ilgili adresleri kontrol edip haritadan '
+            'elle konum seçin.';
+      } else if (added == addressesToProcess.length) {
+        message = '✅ $added adres başarıyla işlendi. '
+            '$cacheHits adres lokal cache\'den alındı, '
+            '$geocodedCount adres geocode edildi.';
+      } else {
+        message = '⚠️ $added / ${addressesToProcess.length} adres işlendi. '
+            '$cacheHits cache, $geocodedCount geocode.';
+      }
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message), duration: const Duration(seconds: 4)),
+        SnackBar(
+          content: Text(message),
+          duration: Duration(seconds: noCoordCount > 0 ? 10 : 4),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
+      importProgress?.dispose();
       if (progressDialogContext != null && progressDialogContext!.mounted) {
         Navigator.of(progressDialogContext!).pop();
         progressDialogContext = null;
@@ -1679,27 +1866,78 @@ class _HomePageState extends State<HomePage> {
   // ─────────────────────────────────────────────────────────────────────────
   // BUILD
   // ─────────────────────────────────────────────────────────────────────────
+  Widget _buildStatusScreen({
+    required Widget icon,
+    required String message,
+    Widget? action,
+  }) {
+    return Scaffold(
+      backgroundColor: _T.bg,
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            icon,
+            const SizedBox(height: 16),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: _T.textMid, fontSize: 13),
+            ),
+            if (action != null) ...[
+              const SizedBox(height: 16),
+              action,
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final fleet = context.watch<FleetState>();
+
+    if (!_driversLoadAttempted) {
+      return _buildStatusScreen(
+        icon: const CircularProgressIndicator(),
+        message: 'Sürücüler yükleniyor...',
+      );
+    }
+
     if (fleet.drivers.isEmpty) {
-      return const Scaffold(
-        backgroundColor: _T.bg,
-        body: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 16),
-              Text(
-                'Sürücüler yükleniyor...',
-                style: TextStyle(color: _T.textMid, fontSize: 13),
-              ),
-            ],
+      if (_driversLoadError) {
+        return _buildStatusScreen(
+          icon: const Icon(Icons.wifi_off_rounded, color: _T.textMid, size: 32),
+          message: 'Sürücüler yüklenemedi. İnternet bağlantınızı kontrol edin.',
+          action: FilledButton(
+            onPressed: _loadDriversAndSync,
+            child: const Text('Tekrar Dene'),
           ),
+        );
+      }
+      return _buildStatusScreen(
+        icon: const Icon(Icons.person_off_rounded, color: _T.textMid, size: 32),
+        message: 'Henüz kayıtlı sürücü yok.',
+        action: FilledButton(
+          onPressed: _showCreateDriverDialog,
+          child: const Text('Yeni Sürücü Ekle'),
         ),
       );
     }
+
+    if (fleet.activeWorkspace == null) {
+      // Güvenlik ağı: cihazda önceden önbelleğe alınmış sürücü verisi
+      // (bkz. AppStorage._loadFleet) backend'den henüz senkronize edilmeden
+      // görünür olabilir — bu durumda aktif sürücü id'si henüz atanmamış
+      // olur. Ana ekrana geçip _currentWorkspace (activeWorkspace!) çökmek
+      // yerine senkronizasyon tamamlanana kadar burada bekle.
+      return _buildStatusScreen(
+        icon: const CircularProgressIndicator(),
+        message: 'Sürücüler yükleniyor...',
+      );
+    }
+
     return Scaffold(
       backgroundColor: _T.bg,
       body: Row(
@@ -1958,91 +2196,12 @@ class _Sidebar extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
-            child: Row(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: _T.accent.withValues(alpha: 0.18),
-                    borderRadius: BorderRadius.circular(10),
-                    border:
-                        Border.all(color: _T.accent.withValues(alpha: 0.35)),
-                  ),
-                  child: const Center(
-                    child: Text(
-                      'R360',
-                      style: TextStyle(
-                        color: _T.accent,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                const Text(
-                  'Rota360',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 15,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.06),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      color: _T.accentRed.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(
-                      Icons.add_location_alt_rounded,
-                      color: _T.accentRed,
-                      size: 20,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Text(
-                        'Adres Havuzu',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 13,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          SizedBox(
-                            width: 7,
-                            height: 7,
-                          ),
-                          const SizedBox(width: 4),
-                        ],
-                      ),
-                    ],
-                  ),
-                ],
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: Image.asset(
+                'assets/images/logo.png',
+                height: 40,
+                fit: BoxFit.contain,
               ),
             ),
           ),
@@ -3386,12 +3545,15 @@ class _IdleEmptyState extends StatelessWidget {
               ),
               const SizedBox(height: 20),
 
-              // İpucu rozetleri
-              Row(
-                mainAxisSize: MainAxisSize.min,
+              // İpucu rozetleri — dar panellerde (bkz. RenderFlex overflow)
+              // yan yana sığmayabiliyordu, Wrap ile gerekirse alt satıra
+              // geçer.
+              Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 8,
+                runSpacing: 8,
                 children: [
                   _HintBadge(icon: Icons.touch_app_rounded, label: 'Tıkla'),
-                  const SizedBox(width: 8),
                   _HintBadge(
                     icon: Icons.drag_indicator_rounded,
                     label: 'Sürükle',
