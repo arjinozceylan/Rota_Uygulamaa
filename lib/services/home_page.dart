@@ -1062,6 +1062,29 @@ class _HomePageState extends State<HomePage> {
         ).showSnackBar(const SnackBar(content: Text('Dosya boş')));
         return;
       }
+
+      // Gerçek başlık satırını bul. Excel dosyalarında sütun başlıklarından
+      // önce bir başlık/dosya adı satırı ("hasta_listesiyeni" gibi, tek bir
+      // hücrede) olabiliyor — bu satır tamamen boş olmadığı için önceki
+      // "sadece tamamen boş satırları atla" mantığı bunu atlamıyor ve
+      // başlık satırı sanıyordu. "Adres" sütununu bu sahte başlıkta hiç
+      // bulamayıp yanlışlıkla ilk sütuna (sıra/hasta no) düşüyordu.
+      // Bunun yerine ilk birkaç satırı tarayıp "Adres" (ya da "Adres"
+      // geçen) bir hücre içeren asıl başlık satırını buluyoruz.
+      int headerRowIndex = 0;
+      const headerScanLimit = 10;
+      for (var i = 0; i < rows.length && i < headerScanLimit; i++) {
+        final normalized =
+            rows[i].map((c) => c.trim().toLowerCase()).toList();
+        final hasAddressHeader = normalized.any(
+          (c) => c == 'adres' || c == 'adresi' || c.contains('adres'),
+        );
+        if (hasAddressHeader) {
+          headerRowIndex = i;
+          break;
+        }
+      }
+      rows = rows.sublist(headerRowIndex);
       final headerCols = rows.first;
 
       // Adres sütununu başlığa göre bul. TC No, hasta adı-soyadı, irtibat,
@@ -1156,33 +1179,45 @@ class _HomePageState extends State<HomePage> {
         );
       }
 
-      final cacheResponse = await http.post(
-        Uri.parse('http://127.0.0.1:3100/geocode-cache/bulk'),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'addresses': addressesToProcess,
-        }),
-      );
-
       final Map<String, dynamic> cachedCoordinates = {};
 
-      if (cacheResponse.statusCode >= 200 && cacheResponse.statusCode < 300) {
-        final decoded = jsonDecode(cacheResponse.body) as Map<String, dynamic>;
+      // local_backend (127.0.0.1:3100) sadece hız optimizasyonu için —
+      // önceden geocode edilmiş adresleri tekrar sorgulamamak amacıyla.
+      // Önceden bu istek try/catch dışındaydı: local_backend çalışmıyorsa
+      // (henüz başlatılmadıysa, çökmüşse vb.) tüm içe aktarma işlemi
+      // geocoding'e hiç başlamadan burada exception ile duruyordu.
+      // Artık önbellek erişilemezse sadece cache hit'siz devam ediliyor.
+      try {
+        final cacheResponse = await http.post(
+          Uri.parse('http://127.0.0.1:3100/geocode-cache/bulk'),
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode({
+            'addresses': addressesToProcess,
+          }),
+        );
 
-        final results = decoded['results'];
+        if (cacheResponse.statusCode >= 200 && cacheResponse.statusCode < 300) {
+          final decoded =
+              jsonDecode(cacheResponse.body) as Map<String, dynamic>;
 
-        if (results is Map) {
-          cachedCoordinates.addAll(
-            results.map(
-              (key, value) => MapEntry(
-                key.toString(),
-                Map<String, dynamic>.from(value as Map),
+          final results = decoded['results'];
+
+          if (results is Map) {
+            cachedCoordinates.addAll(
+              results.map(
+                (key, value) => MapEntry(
+                  key.toString(),
+                  Map<String, dynamic>.from(value as Map),
+                ),
               ),
-            ),
-          );
+            );
+          }
         }
+      } catch (_) {
+        // local_backend'e ulaşılamadı — cache hit'siz devam et, tüm
+        // adresler doğrudan geocoding'e gidecek.
       }
 
       // await http.post yukarida sayfa unmount olmus olabilir — context'i
