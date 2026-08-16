@@ -840,6 +840,8 @@ class _HomePageState extends State<HomePage> {
         dropped.removeWhere((e) => e == home.address);
         repeatByAddress.remove(home.address);
       });
+      _persist();
+      _syncTodayRouteNow();
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -872,12 +874,29 @@ class _HomePageState extends State<HomePage> {
       dropped.removeWhere((e) => e == home.address);
       repeatByAddress.remove(home.address);
     });
+    _persist();
+    _syncTodayRouteNow();
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Sabit ev/başlangıç konumu ayarlandı: ${home.address}'),
       ),
+    );
+  }
+
+  // Sabit ev/başlangıç adresi ayarlandığında/değiştiğinde çağrılır.
+  // Önceden bu adres set edildiğinde hiçbir şey senkronize edilmiyordu —
+  // takvimde bugün için zaten bir plan varsa (adres henüz ayarlanmadığı
+  // için daha önce sessizce atlanmış olabilir, bkz. syncTodayRouteForDriver),
+  // kullanıcı adresi sonradan ayarlasa bile sürücünün telefonundaki aktif
+  // rota otomatik güncellenmiyordu; ancak takvime tekrar dokunulunca ya da
+  // panel yeniden açılınca senkronize oluyordu.
+  void _syncTodayRouteNow() {
+    final driverId = _fleetState.activeDriverId;
+    if (driverId == null) return;
+    unawaited(
+      syncTodayRouteForDriver(driverId: driverId, workspace: _currentWorkspace),
     );
   }
 
