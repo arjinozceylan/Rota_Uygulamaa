@@ -307,6 +307,23 @@ app.post("/patients/import", (req, res) => {
   }
 });
 
+// "Adresleri Temizle" butonuyla tetiklenir — aktif hasta/adres havuzunu
+// kalıcı olarak siler. Haftalık yeni Excel geldiğinde eski liste sadece
+// pasife alınıyordu (is_active=0, bkz. /patients/import); burada ise
+// kullanıcı elle "sıfırla" dediği için gerçek DELETE yapılıyor — aksi
+// halde silinen kayıtlar arka planda kalır ve uygulama bir dahaki açılışta
+// GET /patients ile bunları tekrar yükler (adresler "geri gelmiş" gibi
+// görünür).
+app.delete("/patients", (req, res) => {
+  try {
+    const result = db.prepare("DELETE FROM patients").run();
+    res.json({ message: "Adres havuzu temizlendi", deleted: result.changes });
+  } catch (error) {
+    console.error("Patients clear error:", error);
+    res.status(500).json({ error: "Adres havuzu temizlenemedi" });
+  }
+});
+
 // Excel/CSV yükleme geçmişini getir
 app.get("/imports", (req, res) => {
   try {

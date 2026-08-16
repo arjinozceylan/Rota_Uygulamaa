@@ -986,6 +986,19 @@ class _HomePageState extends State<HomePage> {
       AddressStore.clear();
     });
     _persist();
+    // local_backend'deki SQLite'da adresler kalırsa uygulama bir dahaki
+    // açılışta _loadPatientsFromLocalDatabase() ile bunları geri yükler
+    // (adresler "temizlemeye rağmen geri geliyor" gibi görünür) — bu yüzden
+    // orayı da temizliyoruz. local_backend kapalıysa sessizce geçilir.
+    unawaited(_clearLocalPatientsDatabase());
+  }
+
+  Future<void> _clearLocalPatientsDatabase() async {
+    try {
+      await http
+          .delete(Uri.parse('http://127.0.0.1:3100/patients'))
+          .timeout(const Duration(seconds: 5));
+    } catch (_) {}
   }
 
   // CSV hücreleri çift tırnakla sarmalanmış olabilir (ör. ayraç içeren metin);

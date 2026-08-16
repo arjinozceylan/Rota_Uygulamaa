@@ -298,10 +298,18 @@ Name: "{localappdata}\Rota360\backend\data"
 ; turetilen bu klasorde tutuluyor - installer'in kurdugu {localappdata}
 ; klasorunun DISINDA oldugu icin normal bir yeniden kurulum bunu SILMIYOR.
 ; Onceki kurulumda tam bu yuzden "eski onbellegi elle silmeden calismadi"
-; sorunu yasandi. Hastanin SQLite verisi ({localappdata}\Rota360\backend\data)
-; buna dahil degil, ona hic dokunulmuyor.
+; sorunu yasandi.
+;
+; Hastane PC'sindeki lokal backend SQLite'i (adres/hasta havuzu, geocode
+; onbellegi, import gecmisi) da ayni sekilde installer'in kopyaladigi
+; dosyalarin DISINDaydi (backendStage\data hep BOS kopyalaniyor, bkz.
+; yukarida "Bos data klasoru") - yani bir onceki (bozuk/test) kurulumdan
+; kalma veri, yeniden kurulumda SILINMEDEN oldugu gibi duruyordu. Artik
+; bu da her kurulumda temizleniyor; [Dirs] adimi hemen ardindan klasoru
+; bos olarak yeniden olusturuyor.
 [InstallDelete]
 Type: filesandordirs; Name: "{userappdata}\Rota360\Rota360"
+Type: filesandordirs; Name: "{localappdata}\Rota360\backend\data"
 
 [Icons]
 Name: "{group}\Rota360"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ""{app}\Start-Rota360.ps1"""; WorkingDir: "{app}"; IconFilename: "{app}\app\$appExeName"
