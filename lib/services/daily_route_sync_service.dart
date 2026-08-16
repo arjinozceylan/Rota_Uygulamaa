@@ -37,7 +37,6 @@ Future<void> syncTodayRouteForDriver({
     ...(dayPlan[ShiftType.morning] ?? const <VisitPlanItem>[]),
     ...(dayPlan[ShiftType.afternoon] ?? const <VisitPlanItem>[]),
   ];
-  if (items.isEmpty) return;
 
   final byTitle = {for (final a in AddressStore.items) a.address: a};
   final stops = <Address>[];
@@ -45,7 +44,35 @@ Future<void> syncTodayRouteForDriver({
     final a = byTitle[item.title];
     if (a != null && a.lat != null && a.lng != null) stops.add(a);
   }
-  if (stops.isEmpty) return;
+
+  // Önceden burada durak kalmayınca sessizce çıkılıyordu — ama takvimde
+  // bugün için bir plan VARDI (dayPlan != null), sadece son durak da
+  // silinerek boşaldı. Bu durumda hiç POST atmamak, backend'deki eski
+  // (silinen durağı hâlâ içeren) rotayı "aktif" bırakıyor, sürücünün
+  // telefonunda o durak asla kaybolmuyordu. Artık boş bir rota göndererek
+  // eskisini açıkça geçersiz kılıyoruz.
+  if (stops.isEmpty) {
+    try {
+      await http.post(
+        Uri.parse('https://route-backend-1.onrender.com/routes'),
+        headers: await AuthService.authHeaders(),
+        body: jsonEncode({
+          'user_id': driverId,
+          'name': 'Günlük Rota',
+          'route_json': {
+            'createdAt': now.toIso8601String(),
+            'totalMin': 0,
+            'totalKm': 0.0,
+            'path': [home.address],
+            'stops': <Map<String, dynamic>>[],
+          },
+        }),
+      );
+    } catch (_) {
+      // Ağ hatası — sessizce geç, bir sonraki senkronizasyonda tekrar denenir.
+    }
+    return;
+  }
 
   try {
     // Kapalı tur: ev -> takvimdeki sıradaki duraklar -> ev.

@@ -354,14 +354,16 @@ class _CalendarPageState extends State<CalendarPage>
   }
 
   // ── Dialogs ───────────────────────────────────────────────────────────────
-  Future<VisitPlanItem?> _showAddOrEditDialog({
+  // deleted:true ise kullanıcı bu tek görünümü (sadece bu gün/vardiya)
+  // sildi; item, kaydedilecek/güncellenecek plan (iptal edildiyse null).
+  Future<({bool deleted, VisitPlanItem? item})> _showAddOrEditDialog({
     required String title,
     VisitPlanItem? existing,
   }) async {
     RepeatType selected = existing?.repeat ?? RepeatType.none;
     final noteCtrl = TextEditingController(text: existing?.note ?? '');
 
-    final res = await showDialog<VisitPlanItem>(
+    final res = await showDialog<({bool deleted, VisitPlanItem? item})>(
       context: context,
       builder: (_) => _PlanDialog(
         title: title,
@@ -372,7 +374,7 @@ class _CalendarPageState extends State<CalendarPage>
       ),
     );
     noteCtrl.dispose();
-    return res;
+    return res ?? (deleted: false, item: null);
   }
 
   Future<void> _handleDropAddress(
@@ -385,7 +387,8 @@ class _CalendarPageState extends State<CalendarPage>
       return;
     }
 
-    final item = await _showAddOrEditDialog(title: address.address);
+    final result = await _showAddOrEditDialog(title: address.address);
+    final item = result.item;
     if (item == null) return;
 
     setState(() {
@@ -402,7 +405,35 @@ class _CalendarPageState extends State<CalendarPage>
     final list = _planByDay[dayKey]?[shift];
     if (list == null || index < 0 || index >= list.length) return;
     final old = list[index];
-    final updated = await _showAddOrEditDialog(title: old.title, existing: old);
+    final result = await _showAddOrEditDialog(title: old.title, existing: old);
+
+    if (result.deleted) {
+      setState(() {
+        final currentList = _planByDay[dayKey]?[shift];
+        if (currentList != null && index < currentList.length) {
+          currentList.removeAt(index);
+        }
+      });
+      _fleetState.markDirty();
+      _persist();
+      // Bugünün planından silindiyse, sürücünün telefonundaki aktif rotayı
+      // da hemen güncelle — aksi halde bu değişiklik ancak panel bir dahaki
+      // açılışta (_loadDriversAndSync) senkronize olana kadar telefona hiç
+      // yansımazdı.
+      if (_isToday(dayKey)) {
+        final driverId = _fleetState.activeDriverId;
+        final workspace = _fleetState.activeWorkspace;
+        if (driverId != null && workspace != null) {
+          unawaited(
+            syncTodayRouteForDriver(driverId: driverId, workspace: workspace),
+          );
+        }
+      }
+      _toast('Silindi.');
+      return;
+    }
+
+    final updated = result.item;
     if (updated == null) return;
     setState(() {
       _removeSeriesEverywhere(old.seriesId);
@@ -2219,9 +2250,50 @@ class _PlanDialogState extends State<_PlanDialog> {
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
               child: Row(
                 children: [
+                  if (widget.existing != null) ...[
+                    IconButton(
+                      tooltip: 'Bu görünümü sil',
+                      onPressed: () async {
+                        final confirmed = await showDialog<bool>(
+                          context: context,
+                          builder: (dialogContext) => AlertDialog(
+                            title: const Text('Planı Sil'),
+                            content: const Text(
+                              'Bu durak, sadece bu gün/vardiyadan '
+                              'kaldırılacak (tekrar eden diğer günler '
+                              'etkilenmez). Bugünse sürücünün telefonuna '
+                              'da otomatik yansıyacak. Emin misin?',
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () =>
+                                    Navigator.of(dialogContext).pop(false),
+                                child: const Text('Vazgeç'),
+                              ),
+                              FilledButton(
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: Colors.red,
+                                ),
+                                onPressed: () =>
+                                    Navigator.of(dialogContext).pop(true),
+                                child: const Text('Sil'),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (confirmed == true && context.mounted) {
+                          Navigator.pop(context, (deleted: true, item: null));
+                        }
+                      },
+                      icon: const Icon(Icons.delete_outline_rounded,
+                          color: Colors.red),
+                    ),
+                    const SizedBox(width: 4),
+                  ],
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: () => Navigator.pop(context, null),
+                      onPressed: () =>
+                          Navigator.pop(context, (deleted: false, item: null)),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: _C.textMid,
                         side: const BorderSide(color: _C.stroke),
@@ -2244,12 +2316,15 @@ class _PlanDialogState extends State<_PlanDialog> {
                         final note = widget.noteCtrl.text.trim();
                         Navigator.pop(
                           context,
-                          VisitPlanItem(
-                            title: widget.title,
-                            repeat: _selected,
-                            note: note.isEmpty ? null : note,
-                            seriesId: widget.existing?.seriesId ??
-                                widget.newSeriesId(widget.title),
+                          (
+                            deleted: false,
+                            item: VisitPlanItem(
+                              title: widget.title,
+                              repeat: _selected,
+                              note: note.isEmpty ? null : note,
+                              seriesId: widget.existing?.seriesId ??
+                                  widget.newSeriesId(widget.title),
+                            ),
                           ),
                         );
                       },

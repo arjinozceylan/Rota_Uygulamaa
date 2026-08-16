@@ -293,6 +293,16 @@ Source: "$staging\KurulumSonrasiKontrol.ps1"; DestDir: "{app}"; Flags: ignorever
 [Dirs]
 Name: "{localappdata}\Rota360\backend\data"
 
+; shared_preferences (uygulama arayuz onbellegi: surucu listesi, adres
+; havuzu, secili sekme vb.) exe'nin CompanyName/ProductName bilgisinden
+; turetilen bu klasorde tutuluyor - installer'in kurdugu {localappdata}
+; klasorunun DISINDA oldugu icin normal bir yeniden kurulum bunu SILMIYOR.
+; Onceki kurulumda tam bu yuzden "eski onbellegi elle silmeden calismadi"
+; sorunu yasandi. Hastanin SQLite verisi ({localappdata}\Rota360\backend\data)
+; buna dahil degil, ona hic dokunulmuyor.
+[InstallDelete]
+Type: filesandordirs; Name: "{userappdata}\Rota360\Rota360"
+
 [Icons]
 Name: "{group}\Rota360"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ""{app}\Start-Rota360.ps1"""; WorkingDir: "{app}"; IconFilename: "{app}\app\$appExeName"
 Name: "{autodesktop}\Rota360"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ""{app}\Start-Rota360.ps1"""; WorkingDir: "{app}"; IconFilename: "{app}\app\$appExeName"

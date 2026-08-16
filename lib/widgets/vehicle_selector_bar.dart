@@ -93,6 +93,67 @@ Future<void> _confirmAndDeleteDriverRoutes(
   }
 }
 
+Future<void> _deleteDriverAccount(int driverId) async {
+  final response = await http.delete(
+    Uri.parse('${AuthService.baseUrl}/users/$driverId'),
+    headers: await AuthService.authHeaders(),
+  );
+  if (response.statusCode < 200 || response.statusCode >= 300) {
+    AuthService.flagIfSessionError(response.body);
+    String message = 'Sürücü silinemedi (${response.statusCode})';
+    try {
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      if (decoded['error'] is String) message = decoded['error'] as String;
+    } catch (_) {}
+    throw Exception(message);
+  }
+}
+
+Future<void> _confirmAndDeleteDriverAccount(
+  BuildContext context,
+  Driver driver,
+) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Sürücüyü Sil'),
+      content: Text(
+        '"${driver.username}" hesabı, tüm rotaları, çalışma alanı ve konum '
+        'geçmişiyle birlikte kalıcı olarak silinecek. Sürücü artık mobil '
+        'uygulamaya giriş yapamayacak. Bu işlem geri alınamaz.\n\n'
+        'Not: "${driver.username}" sürücü1..sürücü10 hesaplarından biriyse, '
+        'sunucu yeniden başlatıldığında (ör. bir sonraki deploy) otomatik '
+        'olarak varsayılan şifreyle yeniden oluşturulabilir.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(false),
+          child: const Text('Vazgeç'),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(backgroundColor: Colors.red),
+          onPressed: () => Navigator.of(dialogContext).pop(true),
+          child: const Text('Sürücüyü Sil'),
+        ),
+      ],
+    ),
+  );
+  if (confirmed != true) return;
+
+  try {
+    await _deleteDriverAccount(driver.id);
+    if (!context.mounted) return;
+    await _fetchAndSyncDrivers(context);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('"${driver.username}" silindi.')),
+    );
+  } catch (e) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+  }
+}
+
 Future<void> _showAddDriverMenu(BuildContext context) async {
   await showDialog<void>(
     context: context,
@@ -368,6 +429,8 @@ class VehicleSelectorBar extends StatelessWidget {
               onTap: () => context.read<FleetState>().selectDriver(driver.id),
               onDeleteRoutes: () =>
                   _confirmAndDeleteDriverRoutes(context, driver),
+              onDeleteAccount: () =>
+                  _confirmAndDeleteDriverAccount(context, driver),
               compact: compact,
             );
           }),
@@ -387,6 +450,7 @@ class _DriverChip extends StatelessWidget {
     required this.selected,
     required this.onTap,
     required this.onDeleteRoutes,
+    required this.onDeleteAccount,
     required this.compact,
   });
 
@@ -394,6 +458,7 @@ class _DriverChip extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
   final VoidCallback onDeleteRoutes;
+  final VoidCallback onDeleteAccount;
   final bool compact;
 
   @override
@@ -447,6 +512,21 @@ class _DriverChip extends StatelessWidget {
                     padding: const EdgeInsets.all(4),
                     child: Icon(
                       Icons.route_outlined,
+                      size: compact ? 14 : 15,
+                      color: fg.withValues(alpha: 0.7),
+                    ),
+                  ),
+                ),
+              ),
+              Tooltip(
+                message: 'Sürücü hesabını sil',
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: onDeleteAccount,
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(
+                      Icons.person_remove_outlined,
                       size: compact ? 14 : 15,
                       color: fg.withValues(alpha: 0.7),
                     ),
